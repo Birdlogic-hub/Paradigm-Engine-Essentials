@@ -16,7 +16,7 @@ Each scenario has four scripting tabs (Library, Input, Context, Output). Pick ON
 
 **PE Essentials (standalone):** paste the four `PE Essentials - *.js` files into their matching tabs.
 
-**PE Essentials + Inner Self:** paste the four `PE Essentials + IS - *.js` files into their matching tabs. This bundle already includes Inner Self v1.0.2 with Auto-Cards — do not also install Inner Self separately.
+**PE Essentials + Inner Self:** paste the four `PE Essentials x IS - *.js` files into their matching tabs. This bundle already includes Inner Self v1.0.2 with Auto-Cards — do not also install Inner Self separately.
 
 Editable settings appear in-game as story cards (`GateKit Config`, `Inventory Config`) from your first action; the `Event Log` card shows what the engine is doing as you play.
 
@@ -36,4 +36,4 @@ node test/run.js      # runs all harness suites (also runs in CI on every push)
 ## Credits & licenses
 
 - Paradigm Engine Essentials by **bottledfox** — see [LICENSE](LICENSE).
-- The `PE Essentials + IS` bundle redistributes **[Inner Self](https://github.com/LewdLeah/Inner-Self) v1.0.2 (with bundled Auto-Cards) by LewdLeah**, pinned unmodified — free and open source, all credit to her. If you only want Inner Self, get it from her repository.
+- The `PE Essentials x IS` bundle redistributes **[Inner Self](https://github.com/LewdLeah/Inner-Self) v1.0.2 (with bundled Auto-Cards) by LewdLeah**, pinned unmodified — free and open source, all credit to her. If you only want Inner Self, get it from her repository.

@@ -18,6 +18,6 @@ if (fs.existsSync(IS_PINNED)) {
     const isc = fs.readFileSync(path.join(__dirname, "ISCompat", "ISCompat.js"), "utf-8").trimEnd();
     const is = fs.readFileSync(IS_PINNED, "utf-8").trimEnd();
     const fork = out + "\n" + isc + "\n\n" + is + "\n";
-    fs.writeFileSync(path.join(__dirname, "PE Essentials + IS - Library.js"), fork);
-    console.log("IS fork: bundle + ISCompat + Inner Self v1.0.2 -> PE Essentials + IS - Library.js (" + fork.length + " chars)");
+    fs.writeFileSync(path.join(__dirname, "PE Essentials x IS - Library.js"), fork);
+    console.log("IS fork: bundle + ISCompat + Inner Self v1.0.2 -> PE Essentials x IS - Library.js (" + fork.length + " chars)");
 }
