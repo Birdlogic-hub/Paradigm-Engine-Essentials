@@ -1,4 +1,4 @@
-// ===== BridgeKit v0.2.0 =====
+// ===== BridgeKit v0.3.0 =====
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -40,7 +40,17 @@
 // Belt-and-suspenders: state.InnerSelf.AC.event (set when AC consumed the
 // turn) and the global stop flag (a hijacked turn by definition).
 //
-// Known deferral (v0.3 candidate): appending Essentials card titles to
+// v0.3.0 (per the LC study, 7/14/2026): two more script families join the
+// yield taxonomy. Living Characters' Thought asks demand a leading
+// parenthetical (detected via state.livingThoughts.pendingChar — LC clears
+// it every context pass and sets it exactly when an ask was injected; text
+// fallback: the ask's stable phrase). Story Arc Engine's control turns are
+// flag-detectable: state.sae.saveOutput (arc-generation calls) and
+// state.sae.commandCenter_SAE (command UI turns). LC Life Card write-backs
+// need NO yield — their <LC_MEMORY> request is trailing, verdict-first
+// coexists. Wiring for the full merged stack lives in the LC study doc.
+//
+// Known deferral (v0.4 candidate): appending Essentials card titles to
 // Auto-Cards' banned-titles list — AC's API isn't safely reachable from
 // outside IS's closure without invoking AutoCards(); needs its own study.
 
@@ -55,9 +65,13 @@ const ISC_TAIL_WINDOW = 2500;
 // memory compression — AC defaults, verified against the pinned bundle).
 const ISC_AC_MARKER = "# Stop the story and ignore previous instructions.";
 
+// Stable phrase of Living Characters' Thought ask (LC:11205 in the AIDSuite
+// pin) — text fallback when state.livingThoughts is unreadable.
+const ISC_LC_THOUGHT_MARKER = "Begin your reply with ONE short parenthetical";
+
 // Load canary
 try {
-    if (typeof log === "function") log("[BridgeKit] library loaded (v0.2.0)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.3.0)");
 } catch (e) {}
 
 function ISC_isTaskContext(ctx) {
@@ -79,16 +93,45 @@ function ISC_isAutoCardsContext(ctx) {
     return false;
 }
 
+// A Living Characters Thought-ask turn: LC demands the reply OPEN with a
+// name-labeled parenthetical thought — same leading-position collision as
+// an IS task. pendingChar is authoritative (set exactly when the ask was
+// injected this pass, cleared otherwise); the tail marker is the fallback.
+function ISC_isLcThoughtContext(ctx) {
+    try {
+        if (typeof state === "object" && state && state.livingThoughts
+            && typeof state.livingThoughts.pendingChar === "string"
+            && state.livingThoughts.pendingChar !== "") return true;
+    } catch (e) {}
+    return String(ctx || "").slice(-ISC_TAIL_WINDOW).indexOf(ISC_LC_THOUGHT_MARKER) !== -1;
+}
+
+// A Story Arc Engine control turn: arc-generation calls (saveOutput) and
+// command-center UI turns — both private, neither is narration.
+function ISC_isSaeControlTurn() {
+    try {
+        if (typeof state === "object" && state && state.sae) {
+            if (state.sae.saveOutput === true) return true;
+            if (state.sae.commandCenter_SAE) return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
 // Context pass: detect an Inner Self task turn, tell the Check to yield.
 // Returns text untouched, always (rule 7).
 function ISC_onContext(text) {
     const ctx = String(text || "");
     try {
-        const acTurn = ISC_isAutoCardsContext(ctx);
-        if ((acTurn || ISC_isTaskContext(ctx)) && typeof GK_markCommandTurn === "function") {
+        const why = ISC_isAutoCardsContext(ctx) ? "Auto-Cards turn"
+            : ISC_isSaeControlTurn() ? "Story Arc Engine turn"
+            : ISC_isLcThoughtContext(ctx) ? "LC thought turn"
+            : ISC_isTaskContext(ctx) ? "IS task turn"
+            : null;
+        if (why && typeof GK_markCommandTurn === "function") {
             GK_markCommandTurn();
             if (typeof SC_report === "function") {
-                SC_report("BridgeKit", (acTurn ? "Auto-Cards turn" : "IS task turn") + " — Check yields");
+                SC_report("BridgeKit", why + " — Check yields");
             }
         }
     } catch (e) {}

@@ -71,4 +71,45 @@ H.turn(8, "do"); H.resetCaches();
 GK_onInput(H.doFrame("You open the vault"));
 H.assert(GK_onContext(ISC_onContext(H.ctx())) !== H.ctx(), "normal turn after AC turn still injects");
 
+// --- LC thought-ask turn (class #5, per the LC study) ------------------------------
+// pendingChar is the authoritative signal; LC sets it exactly when it injected
+// "Begin your reply with ONE short parenthetical..." into the context tail.
+H.turn(9, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You wave at Jessica"));
+state.livingThoughts = { pendingChar: "Jessica" };
+H.assert(GK_onContext(ISC_onContext(H.ctx())) === H.ctx(), "GK yields on LC thought turn (pendingChar)");
+H.assert(/T9 \[BridgeKit\] LC thought turn — Check yields/.test(SC_get("Event Log").entry), "LC yield posted to Event Log");
+state.livingThoughts = { pendingChar: "" };
+
+// Text-marker fallback: state unreadable, ask visible at the tail
+H.turn(10, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You nod"));
+delete state.livingThoughts;
+const LC_ASK_TAIL = "\n\n<LC_PRIVATE>\nBegin your reply with ONE short parenthetical: Jessica's own private thought right now, in first person (I / me / my), ONE sentence, LABELED with their name. Format: (Jessica: I ...)\n</LC_PRIVATE>";
+H.assert(GK_onContext(ISC_onContext(H.ctx() + LC_ASK_TAIL)) === H.ctx() + LC_ASK_TAIL, "GK yields on LC thought turn (tail marker fallback)");
+
+// LC write-back turns do NOT yield — <LC_MEMORY> requests are trailing, coexist with verdict-first
+H.turn(11, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You confront Marcus"));
+const LC_SEED_TAIL = "\n\n<LC_PRIVATE>\n### Stop the story. Use this card now.\nNew social pressure: Marcus feels rivalry toward Jessica. If something concrete happens with Marcus, record it after the story on its own lines.\n<LC_MEMORY>\nOWNER: Marcus\n</LC_MEMORY>\n</LC_PRIVATE>";
+H.assert(GK_onContext(ISC_onContext(H.ctx() + LC_SEED_TAIL)) !== H.ctx() + LC_SEED_TAIL, "LC write-back turn still adjudicates");
+
+// --- SAE control turns (flag-detectable) -------------------------------------------
+H.turn(12, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You continue"));
+state.sae = { saveOutput: true };
+H.assert(GK_onContext(ISC_onContext(H.ctx())) === H.ctx(), "GK yields on SAE arc-generation call");
+H.assert(/T12 \[BridgeKit\] Story Arc Engine turn — Check yields/.test(SC_get("Event Log").entry), "SAE yield posted to Event Log");
+
+H.turn(13, "do"); H.resetCaches();
+GK_onInput(H.doFrame("/sae help"));
+state.sae = { saveOutput: false, commandCenter_SAE: true };
+H.assert(GK_onContext(ISC_onContext(H.ctx())) === H.ctx(), "GK yields on SAE command-center turn");
+state.sae = { saveOutput: false, commandCenter_SAE: false };
+
+// --- All flags clear: normal adjudication resumes -----------------------------------
+H.turn(14, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You press onward"));
+H.assert(GK_onContext(ISC_onContext(H.ctx())) !== H.ctx(), "normal turn after LC/SAE turns still injects");
+
 H.summary("BridgeKit");
