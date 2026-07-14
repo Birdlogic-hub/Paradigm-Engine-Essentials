@@ -11,13 +11,23 @@ const out = MODULES
 fs.writeFileSync(path.join(__dirname, "PE Essentials - Library.js"), out);
 console.log("bundle: " + MODULES.join(" + ") + " -> PE Essentials - Library.js (" + out.length + " chars)");
 
-// IS-fork Library (example_Lib.js): Essentials + ISCompat + pinned Inner Self.
-// Only built when the pinned copy is reachable (workspace layout).
-const IS_PINNED = path.join(__dirname, "..", "..", "Third Party", "Inner Self", "Inner Self v1.0.2 - Library.js");
-if (fs.existsSync(IS_PINNED)) {
-    const isc = fs.readFileSync(path.join(__dirname, "BridgeKit", "BridgeKit.js"), "utf-8").trimEnd();
-    const is = fs.readFileSync(IS_PINNED, "utf-8").trimEnd();
-    const fork = out + "\n" + isc + "\n\n" + is + "\n";
-    fs.writeFileSync(path.join(__dirname, "PE Essentials x IS - Library.js"), fork);
-    console.log("IS fork: bundle + BridgeKit + Inner Self v1.0.2 -> PE Essentials x IS - Library.js (" + fork.length + " chars)");
+// PE Characters Library: the full character stack — Essentials + BridgeKit +
+// Inner Self (pinned) + Living Characters (pinned) + SlowBurn (pinned).
+// Only built when the workspace pins are reachable; hook tabs are hand-owned.
+const PINS = {
+    is: path.join(__dirname, "..", "..", "Third Party", "Inner Self", "Inner Self v1.0.2 - Library.js"),
+    lc: path.join(__dirname, "..", "..", "Third Party", "Living Characters", "LC library.js"),
+    sb: path.join(__dirname, "..", "..", "Third Party", "Slowburn", "SB LIBRARY.txt")
+};
+if (Object.values(PINS).every(p => fs.existsSync(p))) {
+    const part = p => fs.readFileSync(p, "utf-8").trimEnd();
+    const chars = [
+        out.trimEnd(),
+        part(path.join(__dirname, "BridgeKit", "BridgeKit.js")),
+        part(PINS.is),
+        part(PINS.lc),
+        part(PINS.sb)
+    ].join("\n\n") + "\n";
+    fs.writeFileSync(path.join(__dirname, "PE Characters - Library.txt"), chars);
+    console.log("PE Characters: bundle + BridgeKit + IS + LC + SlowBurn -> PE Characters - Library.txt (" + chars.length + " chars)");
 }
