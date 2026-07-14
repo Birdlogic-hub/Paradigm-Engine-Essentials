@@ -125,17 +125,21 @@ global.SLOWBURN = function (hook, t) {
 };
 ISC_onInput(H.doFrame("look around"));
 const evo = SC_get("Evolution Stages");
-H.assert(!!evo && evo.entry === "" && /DORMANT/.test(evo.description), "starter card seeded BLANK — template lives in description");
+H.assert(!!evo && /^Character Name:$/m.test(evo.entry) && /^0: /m.test(evo.entry), "starter card seeded as ready-to-fill form (blank name, live-ready ladder)");
 H.assert(/T15 \[BridgeKit\] seeded SlowBurn/.test(SC_get("Event Log").entry), "seeding posted to Event Log");
 
 // Dormant: SB never runs; a leftover block gets scrubbed from the Author's Note
 state.memory.authorsNote = "Keep the tone grim. [Companion's State: Normal behavior. (0.0/100)]";
 ISC_runSlowBurn("output", "Some story text.");
-H.assert(sbCalls === 0, "blank card = suggestion: SLOWBURN not invoked");
+H.assert(sbCalls === 0, "blank name = suggestion: SLOWBURN not invoked (gate must not newline-leap onto 'Gain Rate: 0.2')");
+evo.entry = evo.entry.replace("Character Name:", "Character Name: <NPC>");
+ISC_runSlowBurn("output", "More story text.");
+H.assert(sbCalls === 0, "placeholder name (<NPC>) stays dormant");
+evo.entry = evo.entry.replace("Character Name: <NPC>", "Character Name:");
 H.assert(state.memory.authorsNote === "Keep the tone grim.", "dormant scrub removes SB's block, preserves the player's note");
 
 // Filled: SB runs
-evo.entry = "Evolution Stages Part 1:\nCharacter Name: Winter\nGain Rate: 0.2\nDrain Rate: 0.5\n0: The Default - polite.";
+evo.entry = evo.entry.replace("Character Name:", "Character Name: Winter");
 ISC_runSlowBurn("output", "Winter smiles at you warmly.");
 H.assert(sbCalls === 1, "filled card wakes SlowBurn");
 

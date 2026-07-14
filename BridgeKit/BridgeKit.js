@@ -1,4 +1,4 @@
-// ===== BridgeKit v0.5.0 =====
+// ===== BridgeKit v0.5.1 =====
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -60,12 +60,15 @@
 // v0.5.0 (live-found: the manifested-Companion incident): SlowBurn writes
 // "[Companion's State: ...]" into the Author's Note UNCONDITIONALLY — its
 // default identity leaks into the fiction and the narrator conjures a
-// companion who was never in the story. The seeded card is now BLANK (the
-// template lives in its description, inert — SB's regexes aren't anchored,
-// so template text in the ENTRY would parse as live config), and the card
-// is a SUGGESTION until filled: hook tabs call ISC_runSlowBurn(), which
-// runs SB only when a filled card exists (Character Name present) and
-// scrubs SB's block from the Author's Note while dormant.
+// companion who was never in the story. The card is a SUGGESTION until
+// filled: hook tabs call ISC_runSlowBurn(), which runs SB only when the
+// card is configured, and scrubs SB's block from the Author's Note while
+// dormant.
+// v0.5.1: the seeded ENTRY is a ready-to-fill form (blank Character Name,
+// live-ready rates + stage ladder) — safe because the leash means nothing
+// parses until the name is set, at which point the template IS the config.
+// The gate reads the name on ITS OWN LINE only (SB's \s* would leap the
+// newline and call "Gain Rate: 0.2" a name) and ignores <placeholders>.
 //
 // Known deferral (v0.5 candidate): appending Essentials card titles to
 // Auto-Cards' banned-titles list — AC's API isn't safely reachable from
@@ -88,7 +91,7 @@ const ISC_LC_THOUGHT_MARKER = "Begin your reply with ONE short parenthetical";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[BridgeKit] library loaded (v0.5.0)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.5.1)");
 } catch (e) {}
 
 function ISC_isTaskContext(ctx) {
@@ -139,28 +142,39 @@ function ISC_isSaeControlTurn() {
 // lines + "level: Stage - description" ladder, parsed by its regexes
 // (Character Name/Gain Rate/Drain Rate, /^(\d+):\s*(.*)/ per stage).
 const ISC_SB_CARD_TITLE = "Evolution Stages";
-// ENTRY stays blank — SB's parsers aren't line-anchored, so any template
-// text here would be read as live config. The template ships in the
-// description, where SB never looks.
-const ISC_SB_CARD_ENTRY = "";
-const ISC_SB_CARD_HOWTO = "SlowBurn is DORMANT until you fill this card's Entry. Template (copy "
-    + "into Entry, then edit): Evolution Stages Part 1: / Character Name: <NPC> / "
-    + "Gain Rate: 0.2 / Drain Rate: 0.5 / then stages, one per line, like "
-    + "'0: The Default - polite behavior' and '35: Trusting - shares thoughts unprompted' "
-    + "(each line = level: Stage - description). SlowBurn wakes when Character Name is set.";
+// The ready-to-fill form: blank name, live-ready everything else. Dormant
+// (and unparsed) until Character Name is filled — then this ladder is the
+// starting config, edit at will.
+const ISC_SB_CARD_ENTRY = [
+    "Evolution Stages Part 1:",
+    "Character Name:",
+    "Gain Rate: 0.2",
+    "Drain Rate: 0.5",
+    "0: The Default - Standard, polite behavior towards you.",
+    "15: Warming Up - Friendlier; seeks out small moments of conversation.",
+    "35: Trusting - Shares thoughts unprompted; relies on you in a pinch.",
+    "60: Close - Openly affectionate; takes risks on your behalf.",
+    "85: Devoted - Unshakable loyalty; your goals are their goals."
+].join("\n");
+const ISC_SB_CARD_HOWTO = "SlowBurn is DORMANT until you fill in Character Name above. Everything "
+    + "else is live the moment you do — tune the rates, rewrite the stages "
+    + "(each line = level: Stage - description), add 'Evolution Stages Part 2:' "
+    + "cards if you outgrow this one.";
 
 // SB's own Author's Note block shape (verbatim from its source) — used to
 // scrub the note while SB is dormant.
 const ISC_SB_NOTE_RX = /\[.*?'s State:.*?\]|\[EVO:.*?\]/g;
 
-// Configured = some card carries the header AND a non-empty Character Name.
+// Configured = some card carries the header AND a real Character Name on
+// the name's OWN line (no newline-leaping), placeholders like <NPC> excluded.
 function ISC_slowburnConfigured() {
     if (typeof SC_find !== "function") return false;
     try {
         return !!SC_find(function (c) {
-            return c && typeof c.entry === "string"
-                && c.entry.indexOf("Evolution Stages") !== -1
-                && /Character Name:\s*\S/i.test(c.entry);
+            if (!c || typeof c.entry !== "string" || c.entry.indexOf("Evolution Stages") === -1) return false;
+            const m = c.entry.match(/Character Name:[ \t]*([^\n]*)/i);
+            const name = m ? m[1].trim() : "";
+            return name !== "" && !/^[<\[{].*[>\]}]$/.test(name);
         });
     } catch (e) { return false; }
 }
