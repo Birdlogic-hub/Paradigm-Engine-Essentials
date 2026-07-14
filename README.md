@@ -5,10 +5,10 @@ A modular scripting engine for [AI Dungeon](https://aidungeon.com): four small m
 ## Engine Modules
 
 - **RegexLib** — Shared parsing and command grammar.
-- **ParaCards** — Story card projection and configuration.
+- **CardLib** — Story card projection and configuration.
 - **GateKit** — Silent action adjudication and skill checks.
-- **SlashInventory** — Deterministic inventory and currency management.
-- **ISCompat** — Compatibility shim for running the Essentials alongside [Inner Self](https://github.com/LewdLeah/Inner-Self) (included only in the Inner Self bundle).
+- **InventoryKit** — Deterministic inventory and currency management.
+- **BridgeKit** — Compatibility shim for running the Essentials alongside [Inner Self](https://github.com/LewdLeah/Inner-Self) (included only in the Inner Self bundle).
 
 ## Installation
 
@@ -22,7 +22,7 @@ Editable settings appear in-game as story cards (`GateKit Config`, `Inventory Co
 
 ## Player Guides
 
-The *GateKit* and *SlashInventory* folders contain guides for how to use either module.
+The *GateKit* and *InventoryKit* folders contain guides for how to use either module.
 
 ## Development
 

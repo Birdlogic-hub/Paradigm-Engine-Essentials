@@ -1,4 +1,4 @@
-// ===== ISCompat v0.2.0 =====
+// ===== BridgeKit v0.2.0 =====
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -57,7 +57,7 @@ const ISC_AC_MARKER = "# Stop the story and ignore previous instructions.";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[ISCompat] library loaded (v0.2.0)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.2.0)");
 } catch (e) {}
 
 function ISC_isTaskContext(ctx) {
@@ -88,7 +88,7 @@ function ISC_onContext(text) {
         if ((acTurn || ISC_isTaskContext(ctx)) && typeof GK_markCommandTurn === "function") {
             GK_markCommandTurn();
             if (typeof SC_report === "function") {
-                SC_report("ISCompat", (acTurn ? "Auto-Cards turn" : "IS task turn") + " — Check yields");
+                SC_report("BridgeKit", (acTurn ? "Auto-Cards turn" : "IS task turn") + " — Check yields");
             }
         }
     } catch (e) {}

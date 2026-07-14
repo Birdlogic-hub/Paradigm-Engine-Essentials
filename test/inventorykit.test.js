@@ -1,6 +1,6 @@
 const H = require("./harness");
 H.fresh();
-eval(H.load("RegexLib", "ParaCards", "GateKit", "SlashInventory"));
+eval(H.load("RegexLib", "CardLib", "GateKit", "InventoryKit"));
 
 function play(n, input, modelOut) {
   H.turn(n, "do"); H.resetCaches();
@@ -56,4 +56,4 @@ H.assert(/\{Inventory: .*iron key x1/.test(r.out), "/inventory echoes holdings")
 H.assert(/T\d+ \[Inventory\]/.test(SC_get("Event Log").entry), "mutations reach the Event Log");
 H.assert(/## Wallet/.test(SC_get("Inventory").entry) && /- iron key x 1/.test(SC_get("Inventory").entry), "Inventory card projection");
 
-H.summary("SlashInventory");
+H.summary("InventoryKit");

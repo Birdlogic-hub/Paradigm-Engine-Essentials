@@ -1,4 +1,5 @@
-// ===== ParaCards v0.3.2 =====
+// ===== CardLib v0.3.2 =====
+// (né ParaCards, renamed 7/14/2026 — same module, same SC_ prefix, same versions)
 // script by bottledfox
 //
 // Paradigm Engine primitive: THE PROJECTION.
@@ -30,7 +31,7 @@ const SC_ALWAYS_ON = ".";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[ParaCards] library loaded (v0.3.2)");
+    if (typeof log === "function") log("[CardLib] library loaded (v0.3.2)");
 } catch (e) {}
 
 // --- Lookup ---------------------------------------------------------------------

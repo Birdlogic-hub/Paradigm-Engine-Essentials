@@ -168,7 +168,8 @@ function RX_keyValue(line) {
     return { key: m[1].trim(), value: m[2].trim() };
 }
 
-// ===== ParaCards v0.3.2 =====
+// ===== CardLib v0.3.2 =====
+// (né ParaCards, renamed 7/14/2026 — same module, same SC_ prefix, same versions)
 // script by bottledfox
 //
 // Paradigm Engine primitive: THE PROJECTION.
@@ -200,7 +201,7 @@ const SC_ALWAYS_ON = ".";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[ParaCards] library loaded (v0.3.2)");
+    if (typeof log === "function") log("[CardLib] library loaded (v0.3.2)");
 } catch (e) {}
 
 // --- Lookup ---------------------------------------------------------------------
@@ -807,11 +808,12 @@ function GK_onOutputDebug(text) {
 }
 // ========================== END GK DEBUG SECTION ===============================
 
-// ===== SlashInventory v0.1.2 =====
+// ===== InventoryKit v0.1.2 =====
+// (né SlashInventory, renamed 7/14/2026 — same module, same INV_ prefix, same versions)
 // script by bottledfox
 //
 // Paradigm Engine feature module: THE POSSESSION.
-// (Module named SlashInventory; function prefix stays INV_ — it manages the
+// (Module named InventoryKit; function prefix stays INV_ — it manages the
 //  inventory, and the slash is how you talk to it.)
 // Bookkeeping is deterministic; consequences are adjudicated. A slash command
 // is the player exercising agency over their own possessions — it never
@@ -874,7 +876,7 @@ const INV_UNDO_MAX = 20;       // undo ring buffer depth (SIS's depth, kept)
 
 // Load canary
 try {
-    if (typeof log === "function") log("[SlashInventory] library loaded (v0.1.2)");
+    if (typeof log === "function") log("[InventoryKit] library loaded (v0.1.2)");
 } catch (e) {}
 
 // --- Live settings -----------------------------------------------------------------
@@ -1193,7 +1195,7 @@ function INV_onOutput(text) {
     return out;
 }
 
-// ===== ISCompat v0.2.0 =====
+// ===== BridgeKit v0.2.0 =====
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -1252,7 +1254,7 @@ const ISC_AC_MARKER = "# Stop the story and ignore previous instructions.";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[ISCompat] library loaded (v0.2.0)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.2.0)");
 } catch (e) {}
 
 function ISC_isTaskContext(ctx) {
@@ -1283,7 +1285,7 @@ function ISC_onContext(text) {
         if ((acTurn || ISC_isTaskContext(ctx)) && typeof GK_markCommandTurn === "function") {
             GK_markCommandTurn();
             if (typeof SC_report === "function") {
-                SC_report("ISCompat", (acTurn ? "Auto-Cards turn" : "IS task turn") + " — Check yields");
+                SC_report("BridgeKit", (acTurn ? "Auto-Cards turn" : "IS task turn") + " — Check yields");
             }
         }
     } catch (e) {}

@@ -1,6 +1,6 @@
 const H = require("./harness");
 H.fresh();
-eval(H.load("ParaCards"));
+eval(H.load("CardLib"));
 
 // Projection core
 const c1 = SC_ensure("Condition", { type: "status", keys: SC_ALWAYS_ON, entry: "fine" });
@@ -56,4 +56,4 @@ SC_report("Inventory", "potion x1 used");
 lines = SC_get("Event Log").entry.split("\n");
 H.assert(lines[1].startsWith("T45") && !lines.some(l => /^T4[6-9]|^T5\d/.test(l)), "erased turns dropped");
 
-H.summary("ParaCards");
+H.summary("CardLib");

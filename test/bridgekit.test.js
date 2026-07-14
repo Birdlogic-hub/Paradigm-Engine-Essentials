@@ -1,6 +1,6 @@
 const H = require("./harness");
 H.fresh();
-eval(H.load("ParaCards", "GateKit", "ISCompat"));
+eval(H.load("CardLib", "GateKit", "BridgeKit"));
 
 // --- IS-shaped fixtures (built from the study's line references, rule 9:
 // live-shaped text is LAW — these mirror IS v1.0.2's actual assembly) -------------
@@ -15,7 +15,7 @@ let ctx = IS_DIRECTIVE + H.ctx() + IS_TASK_TAIL;
 let out = ISC_onContext(ctx);
 H.assert(out === ctx, "ISC returns context untouched (rule 7)");
 H.assert(GK_onContext(out) === out, "GK yields on IS task turn");
-H.assert(/T1 \[ISCompat\] IS task turn — Check yields/.test(SC_get("Event Log").entry), "yield posted to Event Log");
+H.assert(/T1 \[BridgeKit\] IS task turn — Check yields/.test(SC_get("Event Log").entry), "yield posted to Event Log");
 
 // --- Non-task IS turn (top-anchored PoV directive): GK proceeds -------------------
 H.turn(2, "do"); H.resetCaches();
@@ -57,7 +57,7 @@ GK_onInput(H.doFrame("/AC Test Chamber"));
 ctx = H.ctx() + AC_GEN_TAIL;
 out = ISC_onContext(ctx);
 H.assert(out === ctx && GK_onContext(out) === out, "GK yields on Auto-Cards generation turn");
-H.assert(/T6 \[ISCompat\] Auto-Cards turn — Check yields/.test(SC_get("Event Log").entry), "AC yield posted to Event Log");
+H.assert(/T6 \[BridgeKit\] Auto-Cards turn — Check yields/.test(SC_get("Event Log").entry), "AC yield posted to Event Log");
 
 // --- AC event flag (belt): AC consumed the turn without a visible prompt ----------
 H.turn(7, "do"); H.resetCaches();
@@ -71,4 +71,4 @@ H.turn(8, "do"); H.resetCaches();
 GK_onInput(H.doFrame("You open the vault"));
 H.assert(GK_onContext(ISC_onContext(H.ctx())) !== H.ctx(), "normal turn after AC turn still injects");
 
-H.summary("ISCompat");
+H.summary("BridgeKit");

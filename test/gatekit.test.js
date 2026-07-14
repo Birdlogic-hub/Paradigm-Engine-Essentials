@@ -1,6 +1,6 @@
 const H = require("./harness");
 H.fresh();
-eval(H.load("ParaCards", "GateKit"));
+eval(H.load("CardLib", "GateKit"));
 
 // Injection + capture happy path
 H.turn(1, "do");
