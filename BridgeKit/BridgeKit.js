@@ -1,4 +1,4 @@
-// ===== BridgeKit v0.6.0 =====
+// ===== BridgeKit v0.6.1 =====
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -91,7 +91,7 @@ const ISC_LC_THOUGHT_MARKER = "Begin your reply with ONE short parenthetical";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[BridgeKit] library loaded (v0.6.0)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.6.1)");
 } catch (e) {}
 
 function ISC_isTaskContext(ctx) {
@@ -195,17 +195,16 @@ function ISC_runSlowBurn(hook, text) {
     } catch (e) {}
 }
 
-// Guest card categories (v0.6.0): the panel groups by type, so guests get
-// source-named categories. LC finds its cards by TITLE, never type — but it
-// recreates Thought Cards on update, so this re-types every input pass
-// (cheap: writes only on drift). IS's "Configure Inner Self" stays untouched
-// (Class), per the owner's call.
+// Guest card categories (v0.6.x, mod-manager style — one banner per mod):
+// LC's three config cards live under "LivingCharacters"; its dynamic
+// Life/Thought cards keep LC's own types (owner's call). IS's Configure
+// card stays Class, untouched. LC ENFORCES card.type on every sync
+// (LC:955), so grooming must have the LAST word each turn — hence the
+// ISC_onOutput passthrough below, wired after LC's output pass.
 function ISC_guestTypeFor(title) {
     const t = String(title || "");
     if (t === "LIVING CHARACTERS CONFIG" || t === "LIVING CHARACTERS RELATIONSHIPS"
-        || t === "THOUGHT CARDS CONFIG") return "Living Characters";
-    if (t.indexOf("Life - ") === 0) return "Living Characters";
-    if (/ - Thoughts$/.test(t)) return "Living Characters";   // incl. the marked "💭 Name - Thoughts"
+        || t === "THOUGHT CARDS CONFIG") return "LivingCharacters";
     return null;
 }
 
@@ -217,6 +216,14 @@ function ISC_retypeGuestCards() {
         const want = ISC_guestTypeFor(c.title);
         if (want && c.type !== want) c.type = want;
     }
+}
+
+// Output pass: passthrough groom. LC re-types its cards on every sync and
+// runs before us on output — this pass runs after, so categories stick
+// between turns. Returns text untouched, always (rule 7).
+function ISC_onOutput(text) {
+    try { ISC_retypeGuestCards(); } catch (e) {}
+    return String(text || "");
 }
 
 // Input pass: guest hospitality. Ensures starter cards for guest scripts
@@ -248,6 +255,7 @@ function ISC_onInput(text) {
 // Returns text untouched, always (rule 7).
 function ISC_onContext(text) {
     const ctx = String(text || "");
+    try { ISC_retypeGuestCards(); } catch (e) {}   // LC's context sync just ran; re-groom
     try {
         const why = ISC_isAutoCardsContext(ctx) ? "Auto-Cards turn"
             : ISC_isSaeControlTurn() ? "Story Arc Engine turn"

@@ -128,14 +128,22 @@ const evo = SC_get("Evolution Stages");
 H.assert(!!evo && /^Character Name:$/m.test(evo.entry) && /^0: /m.test(evo.entry), "starter card seeded as ready-to-fill form (blank name, live-ready ladder)");
 H.assert(evo.type === "Slowburn", "Evolution Stages categorized under Slowburn");
 
-// Guest categories: LC cards re-typed to their source; IS's Class card untouched
+// Guest categories (mod-manager style): LC's three configs -> LivingCharacters;
+// dynamic Life/Thought cards keep LC's own types; IS's Class card untouched.
 storyCards.push({ id: "51", title: "LIVING CHARACTERS CONFIG", keys: "x1", type: "Config", entry: "", description: "" });
-storyCards.push({ id: "52", title: "Life - Marcus", keys: "x2", type: "Custom", entry: "", description: "" });
-storyCards.push({ id: "53", title: "Winter - Thoughts", keys: "x3", type: "Custom", entry: "", description: "" });
-storyCards.push({ id: "54", title: "Configure Inner Self", keys: "x4", type: "Class", entry: "", description: "" });
+storyCards.push({ id: "52", title: "LIVING CHARACTERS RELATIONSHIPS", keys: "x2", type: "Relationships", entry: "", description: "" });
+storyCards.push({ id: "53", title: "THOUGHT CARDS CONFIG", keys: "x3", type: "Config", entry: "", description: "" });
+storyCards.push({ id: "54", title: "Life - Marcus", keys: "x4", type: "active", entry: "", description: "" });
+storyCards.push({ id: "55", title: "Configure Inner Self", keys: "x5", type: "Class", entry: "", description: "" });
 ISC_onInput(H.doFrame("look"));
-H.assert(SC_get("LIVING CHARACTERS CONFIG").type === "Living Characters" && SC_get("Life - Marcus").type === "Living Characters" && SC_get("Winter - Thoughts").type === "Living Characters", "LC cards categorized under Living Characters");
+H.assert(SC_get("LIVING CHARACTERS CONFIG").type === "LivingCharacters" && SC_get("LIVING CHARACTERS RELATIONSHIPS").type === "LivingCharacters" && SC_get("THOUGHT CARDS CONFIG").type === "LivingCharacters", "LC's three configs under LivingCharacters");
+H.assert(SC_get("Life - Marcus").type === "active", "LC's dynamic cards keep LC's own types");
 H.assert(SC_get("Configure Inner Self").type === "Class", "IS Class card untouched");
+// LC re-types on its own sync (LC:955) and runs before us on output — the
+// output groom must win the turn's last word.
+SC_get("LIVING CHARACTERS CONFIG").type = "Config";   // simulate LC's output sync
+H.assert(ISC_onOutput("Story text.") === "Story text." && SC_get("LIVING CHARACTERS CONFIG").type === "LivingCharacters", "ISC_onOutput passthrough grooms after LC's last sync");
+H.assert(SC_get("Event Log").type === "ParadigmEngine" && SC_get("GateKit Config").type === "ParadigmEngine", "engine cards under the ParadigmEngine banner");
 H.assert(/T15 \[BridgeKit\] seeded SlowBurn/.test(SC_get("Event Log").entry), "seeding posted to Event Log");
 
 // Dormant: SB never runs; a leftover block gets scrubbed from the Author's Note

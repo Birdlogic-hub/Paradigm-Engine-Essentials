@@ -1,10 +1,10 @@
-// ===== CardLib v0.4.0 =====
+// ===== CardLib v0.4.1 =====
 // (né ParaCards, renamed 7/14/2026 — same module, same SC_ prefix)
 // v0.4.0: card categories. The story-card panel groups by TYPE, so type is
 // part of the projection: SC_ensure now HEALS type (a card that drifts from
 // its declared category is re-typed, same doctrine as config-line healing).
-// House categories: config cards default to "Paradigm Config"; the Event
-// Log is "Log". Callers override per card (Inventory owns "Inventory").
+// House category (v0.4.1, mod-manager style — one banner per mod): every
+// engine-owned card lives under "ParadigmEngine". Callers may override.
 // script by bottledfox
 //
 // Paradigm Engine primitive: THE PROJECTION.
@@ -36,7 +36,7 @@ const SC_ALWAYS_ON = ".";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[CardLib] library loaded (v0.4.0)");
+    if (typeof log === "function") log("[CardLib] library loaded (v0.4.1)");
 } catch (e) {}
 
 // --- Lookup ---------------------------------------------------------------------
@@ -136,7 +136,7 @@ function SC_config(title, defaults, opts) {
     if (!card) {
         const lines = Object.keys(defaults).map(k => SC_labelFor(k) + ": " + String(defaults[k]));
         card = SC_ensure(title, {
-            type: opts.type || "Paradigm Config",
+            type: opts.type || "ParadigmEngine",
             keys: opts.keys || title,
             entry: header + "\n\n" + lines.join("\n"),
             description: opts.description || ""
@@ -250,7 +250,7 @@ const SC_REPORT_HEADER = "# Event Log — most recent first";
 // empty log card, header only, instead of a card that hides until first post.
 function SC_reportEnsure() {
     return SC_ensure(SC_REPORT_CARD, {
-        type: "Log",
+        type: "ParadigmEngine",
         keys: SC_REPORT_CARD,
         entry: SC_REPORT_HEADER,
         description: "The engine's event log: the last " + SC_REPORT_EVENTS
