@@ -13,3 +13,8 @@ jobs:
           node-version: 22
       - name: Run the harness
         run: node test/run.js
+      - name: Bundles must match module sources
+        run: |
+          node make-bundle.js
+          git diff --exit-code -- "PE Essentials - Library.js" "PE Essentials + IS - Library.js" \
+            || (echo "::error::Stale bundle — run 'node make-bundle.js' and commit the result" && exit 1)
