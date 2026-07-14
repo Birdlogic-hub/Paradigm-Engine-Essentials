@@ -112,4 +112,23 @@ H.turn(14, "do"); H.resetCaches();
 GK_onInput(H.doFrame("You press onward"));
 H.assert(GK_onContext(ISC_onContext(H.ctx())) !== H.ctx(), "normal turn after LC/SAE turns still injects");
 
+// --- Hospitality: SlowBurn starter card (v0.4.0) ------------------------------------
+// Guest present + no card -> seed it; player's own card -> never duplicate; no guest -> nothing.
+H.turn(15, "do"); H.resetCaches();
+H.assert(ISC_onInput(H.doFrame("look around")) === H.doFrame("look around"), "ISC_onInput returns text untouched");
+H.assert(!SC_get("Evolution Stages"), "no SlowBurn, no seeding");
+global.SLOWBURN = function () {};
+ISC_onInput(H.doFrame("look around"));
+const evo = SC_get("Evolution Stages");
+H.assert(!!evo && /Character Name: Companion/.test(evo.entry) && /^0: /m.test(evo.entry), "SlowBurn present: starter card seeded in SB's documented format");
+H.assert(/T15 \[BridgeKit\] seeded SlowBurn/.test(SC_get("Event Log").entry), "seeding posted to Event Log");
+evo.entry = evo.entry.replace("Companion", "Winter");   // player edits
+ISC_onInput(H.doFrame("again"));
+H.assert(/Winter/.test(SC_get("Evolution Stages").entry), "player edits survive re-ensure");
+SC_remove("Evolution Stages");
+storyCards.push({ id: "99", title: "My Custom SB", keys: "My Custom SB", type: "Custom", entry: "Evolution Stages Part 1:\nCharacter Name: Zephyr\nGain Rate: 0.3\n5: Wary - keeps distance." , description: ""});
+ISC_onInput(H.doFrame("once more"));
+H.assert(!SC_get("Evolution Stages"), "player's own Evolution Stages card blocks seeding (no duplicates)");
+delete global.SLOWBURN;
+
 H.summary("BridgeKit");
