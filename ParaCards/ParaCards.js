@@ -1,4 +1,4 @@
-// ===== ParaCards v0.3.1 =====
+// ===== ParaCards v0.3.2 =====
 // script by bottledfox
 //
 // Paradigm Engine primitive: THE PROJECTION.
@@ -17,11 +17,21 @@
 //   SC_render(title, entry, opts)        projection write (only when changed)
 //   SC_remove(title)                     delete by title
 //   SC_config(title, defaults, opts)     editable settings card, typed round-trip
+//   SC_reportEnsure()                    Event Log card exists (Turn-1 seam)
 //   SC_ALWAYS_ON                         keys value that triggers every turn
+//
+// v0.3.2: SC_reportEnsure() — owners materialize the Event Log on their input
+// pass (doctrine rule 11: projections exist from Turn 1, never lazily).
+// Unconditional load canary (rule 8/10: environment bisection needs one).
 // ---------------------------------------------------------------------------
 
 // A lone period matches every turn — the always-on card trick (RESR's Condition).
 const SC_ALWAYS_ON = ".";
+
+// Load canary
+try {
+    if (typeof log === "function") log("[ParaCards] library loaded (v0.3.2)");
+} catch (e) {}
 
 // --- Lookup ---------------------------------------------------------------------
 function SC_find(pred, all) {
@@ -225,6 +235,19 @@ const SC_REPORT_CARD = "Event Log";
 const SC_REPORT_EVENTS = 10;
 const SC_REPORT_HEADER = "# Event Log — most recent first";
 
+// Turn-1 materialization seam (doctrine rule 11): owner modules call this on
+// their input pass so the Event Log is visible from the first action — an
+// empty log card, header only, instead of a card that hides until first post.
+function SC_reportEnsure() {
+    return SC_ensure(SC_REPORT_CARD, {
+        type: "report",
+        keys: SC_REPORT_CARD,
+        entry: SC_REPORT_HEADER,
+        description: "The engine's event log: the last " + SC_REPORT_EVENTS
+            + " engine events, most recent first. Rewrites itself as you play."
+    });
+}
+
 function SC_report(owner, line, turnNo) {
     const msg = "[" + String(owner || "engine") + "] " + String(line || "").trim();
     if (msg.length < 4) return null;
@@ -232,13 +255,7 @@ function SC_report(owner, line, turnNo) {
         : (typeof info === "object" && info && typeof info.actionCount === "number")
             ? info.actionCount : -1;
     const event = "T" + turn + " " + msg;
-    const card = SC_ensure(SC_REPORT_CARD, {
-        type: "report",
-        keys: SC_REPORT_CARD,
-        entry: SC_REPORT_HEADER,
-        description: "The engine's event log: the last " + SC_REPORT_EVENTS
-            + " engine events, most recent first. Rewrites itself as you play."
-    });
+    const card = SC_reportEnsure();
     if (!card) return null;
 
     // Parse existing events from the entry (lines shaped "T<turn> [...] ...")

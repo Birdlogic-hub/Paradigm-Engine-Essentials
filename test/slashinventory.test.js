@@ -16,7 +16,7 @@ function play(n, input, modelOut) {
 // the first player action, before any command is ever issued.
 H.turn(0, "do"); H.resetCaches();
 INV_onInput(H.doFrame("look around"));
-H.assert(!!SC_get("Inventory Config") && !!SC_get("Inventory"), "cards materialize on first action, pre-command");
+H.assert(!!SC_get("Inventory Config") && !!SC_get("Inventory") && !!SC_get("Event Log"), "cards + Event Log materialize on first action, pre-command");
 
 let r = play(1, H.doFrame("/take 3 torches"), "difficulty=trivial; check=success;\nGathered.");
 H.assert(r.t === "You take 3 torches." && INV_count("torches") === 3, "take: stub + optimistic commit kept");

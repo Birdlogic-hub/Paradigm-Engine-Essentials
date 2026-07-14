@@ -1,4 +1,4 @@
-// ===== SlashInventory v0.1.1 =====
+// ===== SlashInventory v0.1.2 =====
 // script by bottledfox
 //
 // Paradigm Engine feature module: THE POSSESSION.
@@ -13,6 +13,7 @@
 // v0.1.1: cards materialize on Turn 1 — INV_cfg()/INV_renderCard() run
 // unconditionally at input (EB's ensure-on-input pattern, SR_ensureCard's
 // call-site discipline expressed through ParaCards primitives).
+// v0.1.2: the Event Log joins them (SC_reportEnsure — doctrine rule 11).
 // Full design: Documentation/Design Proposals/Inventory (the Possession).
 //
 // DEPENDS ON: Core (RegexLib for parsing, ParaCard for cards) — degrades to
@@ -64,7 +65,7 @@ const INV_UNDO_MAX = 20;       // undo ring buffer depth (SIS's depth, kept)
 
 // Load canary
 try {
-    if (typeof log === "function") log("[SlashInventory] library loaded (v0.1.1)");
+    if (typeof log === "function") log("[SlashInventory] library loaded (v0.1.2)");
 } catch (e) {}
 
 // --- Live settings -----------------------------------------------------------------
@@ -209,6 +210,7 @@ function INV_onInput(text) {
     // this never churns a card. Both degrade to no-ops without ParaCards.
     INV_cfg();
     INV_renderCard();
+    if (INV_cfg().REPORT && typeof SC_reportEnsure === "function") SC_reportEnsure();
     const t = String(text || "");
     if (typeof RX_command !== "function") return t;   // no Grammar, no commands
 

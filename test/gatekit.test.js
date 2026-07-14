@@ -8,6 +8,7 @@ GK_onInput(H.doFrame("You climb"));
 let ctx = GK_onContext(H.ctx());
 H.assert(ctx.endsWith("</SYSTEM>") && /luck=\d+/.test(ctx), "arbiter block at context tail with luck");
 H.assert(state.memory.frontMemory === undefined, "frontMemory never touched");
+H.assert(!!SC_get("Event Log"), "Event Log materializes on first input (rule 11)");
 let out = GK_onOutput("difficulty=minor; check=partial; skill=climbing;\nHalfway up.");
 H.assert(GK_lastCheck().result === "partial" && GK_lastCheck().skill === "climbing", "verdict captured");
 H.assert(!/difficulty=/.test(out), "verdict stripped from prose");

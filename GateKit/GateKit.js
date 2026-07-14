@@ -1,4 +1,4 @@
-// ===== GateKit v0.6.1 =====
+// ===== GateKit v0.6.2 =====
 // script by bottledfox
 //
 // Paradigm Engine primitive: THE CHECK.
@@ -66,7 +66,7 @@ const GK_PROMPT = [
 // Load canary: appears in Console Log / Script Test logs on EVERY hook run.
 // If you don't see this line, the Library isn't attached, saved, or executing.
 try {
-    if (GK_cfg().DEBUG_CONSOLE) log("[GateKit] library loaded (v0.6.1)");
+    if (GK_cfg().DEBUG_CONSOLE) log("[GateKit] library loaded (v0.6.2)");
 } catch (e) {}
 
 // Verdict line emitted by the model (difficulty-first schema). skill optional.
@@ -165,6 +165,9 @@ function GK_onInput(text) {
         GK.luckTurn = turn;
         GK.luck = cfg.LUCK_MIN
             + Math.floor(Math.random() * (cfg.LUCK_MAX - cfg.LUCK_MIN + 1));
+        // v0.6.2, doctrine rule 11: projections exist from Turn 1 — the
+        // Event Log materializes here, not on the first ruling post.
+        if (cfg.REPORT && cfg.ENABLED && typeof SC_reportEnsure === "function") SC_reportEnsure();
     }
     return String(text || "");
 }
