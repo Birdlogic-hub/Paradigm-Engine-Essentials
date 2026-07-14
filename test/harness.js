@@ -45,7 +45,7 @@ function load() {
     const caches = [];
     for (const name of arguments) {
         const src = fs.readFileSync(srcPath(name), "utf-8")
-            .replace(/^const (GK_|SC_|RX_|INV_|ISC_)([A-Z_]+)/gm, "var $1$2")
+            .replace(/^const (GK_|SC_|RX_|INV_|BK_)([A-Z_]+)/gm, "var $1$2")
             .replace(/^let (GK_DEBUG_RAW|GK_CFG_CACHE|INV_CFG_CACHE)/gm, "var $1");
         for (const m of src.matchAll(/^var (\w+_CFG_CACHE)/gm)) caches.push(m[1]);
         out += src + "\n";

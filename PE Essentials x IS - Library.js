@@ -1205,7 +1205,9 @@ function INV_onOutput(text) {
     return out;
 }
 
-// ===== BridgeKit v0.6.1 =====
+// ===== BridgeKit v0.7.0 =====
+// v0.7.0: functions renamed ISC_* -> BK_* (ISC was 'Inner Self Compat' — the
+//  module bridges four scripts now; the prefix follows the module at last)
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -1225,7 +1227,7 @@ function INV_onOutput(text) {
 //   Input tab:    InnerSelf("input");
 //                 text = INV_onInput(text);  text = GK_onInput(text);
 //   Context tab:  InnerSelf("context");
-//                 text = ISC_onContext(text);   // BETWEEN IS and GateKit
+//                 text = BK_onContext(text);   // BETWEEN IS and GateKit
 //                 text = GK_onContext(text);
 //   Output tab:   text = GK_onOutput(text);     // BEFORE InnerSelf — the verdict
 //                 InnerSelf("output");          //   must never reach IS's repair
@@ -1268,7 +1270,7 @@ function INV_onOutput(text) {
 // "[Companion's State: ...]" into the Author's Note UNCONDITIONALLY — its
 // default identity leaks into the fiction and the narrator conjures a
 // companion who was never in the story. The card is a SUGGESTION until
-// filled: hook tabs call ISC_runSlowBurn(), which runs SB only when the
+// filled: hook tabs call BK_runSlowBurn(), which runs SB only when the
 // card is configured, and scrubs SB's block from the Author's Note while
 // dormant.
 // v0.5.1: the seeded ENTRY is a ready-to-fill form (blank Character Name,
@@ -1285,31 +1287,31 @@ function INV_onOutput(text) {
 // nowhere else in IS's context assembly. The tail window bounds the search
 // to where IS puts task prompts — story text mentioning the phrase mid-
 // context can't false-positive.
-const ISC_TASK_MARKER = "# STRICT OUTPUT FORMAT";
-const ISC_TAIL_WINDOW = 2500;
+const BK_TASK_MARKER = "# STRICT OUTPUT FORMAT";
+const BK_TAIL_WINDOW = 2500;
 
 // Shared preamble of BOTH Auto-Cards generation prompts (card entry and
 // memory compression — AC defaults, verified against the pinned bundle).
-const ISC_AC_MARKER = "# Stop the story and ignore previous instructions.";
+const BK_AC_MARKER = "# Stop the story and ignore previous instructions.";
 
 // Stable phrase of Living Characters' Thought ask (LC:11205 in the AIDSuite
 // pin) — text fallback when state.livingThoughts is unreadable.
-const ISC_LC_THOUGHT_MARKER = "Begin your reply with ONE short parenthetical";
+const BK_LC_THOUGHT_MARKER = "Begin your reply with ONE short parenthetical";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[BridgeKit] library loaded (v0.6.1)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.7.0)");
 } catch (e) {}
 
-function ISC_isTaskContext(ctx) {
-    return String(ctx || "").slice(-ISC_TAIL_WINDOW).indexOf(ISC_TASK_MARKER) !== -1;
+function BK_isTaskContext(ctx) {
+    return String(ctx || "").slice(-BK_TAIL_WINDOW).indexOf(BK_TASK_MARKER) !== -1;
 }
 
 // An Auto-Cards generation/compression turn: the story model is writing a
 // card, not narration — nothing to adjudicate, and an arbiter block would
 // bleed verdicts into the generated entry (the Test Chamber incident).
-function ISC_isAutoCardsContext(ctx) {
-    if (String(ctx || "").indexOf(ISC_AC_MARKER) !== -1) return true;
+function BK_isAutoCardsContext(ctx) {
+    if (String(ctx || "").indexOf(BK_AC_MARKER) !== -1) return true;
     try {
         if (typeof state === "object" && state && state.InnerSelf
             && state.InnerSelf.AC && state.InnerSelf.AC.event === true) return true;
@@ -1324,18 +1326,18 @@ function ISC_isAutoCardsContext(ctx) {
 // name-labeled parenthetical thought — same leading-position collision as
 // an IS task. pendingChar is authoritative (set exactly when the ask was
 // injected this pass, cleared otherwise); the tail marker is the fallback.
-function ISC_isLcThoughtContext(ctx) {
+function BK_isLcThoughtContext(ctx) {
     try {
         if (typeof state === "object" && state && state.livingThoughts
             && typeof state.livingThoughts.pendingChar === "string"
             && state.livingThoughts.pendingChar !== "") return true;
     } catch (e) {}
-    return String(ctx || "").slice(-ISC_TAIL_WINDOW).indexOf(ISC_LC_THOUGHT_MARKER) !== -1;
+    return String(ctx || "").slice(-BK_TAIL_WINDOW).indexOf(BK_LC_THOUGHT_MARKER) !== -1;
 }
 
 // A Story Arc Engine control turn: arc-generation calls (saveOutput) and
 // command-center UI turns — both private, neither is narration.
-function ISC_isSaeControlTurn() {
+function BK_isSaeControlTurn() {
     try {
         if (typeof state === "object" && state && state.sae) {
             if (state.sae.saveOutput === true) return true;
@@ -1348,11 +1350,11 @@ function ISC_isSaeControlTurn() {
 // The SlowBurn starter card. Format is SB's documented contract: metadata
 // lines + "level: Stage - description" ladder, parsed by its regexes
 // (Character Name/Gain Rate/Drain Rate, /^(\d+):\s*(.*)/ per stage).
-const ISC_SB_CARD_TITLE = "Evolution Stages";
+const BK_SB_CARD_TITLE = "Evolution Stages";
 // The ready-to-fill form: blank name, live-ready everything else. Dormant
 // (and unparsed) until Character Name is filled — then this ladder is the
 // starting config, edit at will.
-const ISC_SB_CARD_ENTRY = [
+const BK_SB_CARD_ENTRY = [
     "Evolution Stages Part 1:",
     "Character Name:",
     "Gain Rate: 0.2",
@@ -1363,18 +1365,18 @@ const ISC_SB_CARD_ENTRY = [
     "60: Close - Openly affectionate; takes risks on your behalf.",
     "85: Devoted - Unshakable loyalty; your goals are their goals."
 ].join("\n");
-const ISC_SB_CARD_HOWTO = "SlowBurn is DORMANT until you fill in Character Name above. Everything "
+const BK_SB_CARD_HOWTO = "SlowBurn is DORMANT until you fill in Character Name above. Everything "
     + "else is live the moment you do — tune the rates, rewrite the stages "
     + "(each line = level: Stage - description), add 'Evolution Stages Part 2:' "
     + "cards if you outgrow this one.";
 
 // SB's own Author's Note block shape (verbatim from its source) — used to
 // scrub the note while SB is dormant.
-const ISC_SB_NOTE_RX = /\[.*?'s State:.*?\]|\[EVO:.*?\]/g;
+const BK_SB_NOTE_RX = /\[.*?'s State:.*?\]|\[EVO:.*?\]/g;
 
 // Configured = some card carries the header AND a real Character Name on
 // the name's OWN line (no newline-leaping), placeholders like <NPC> excluded.
-function ISC_slowburnConfigured() {
+function BK_slowburnConfigured() {
     if (typeof SC_find !== "function") return false;
     try {
         return !!SC_find(function (c) {
@@ -1390,14 +1392,14 @@ function ISC_slowburnConfigured() {
 // until the card is filled; while dormant, SB's default-identity block
 // ("[Companion's State: ...]") is scrubbed from the Author's Note so the
 // narrator never manifests a companion nobody wrote.
-function ISC_runSlowBurn(hook, text) {
+function BK_runSlowBurn(hook, text) {
     try {
         if (typeof SLOWBURN !== "function") return;
-        if (ISC_slowburnConfigured()) {
+        if (BK_slowburnConfigured()) {
             SLOWBURN(hook, text);
         } else if (state && state.memory && typeof state.memory.authorsNote === "string"
-            && ISC_SB_NOTE_RX.test(state.memory.authorsNote)) {
-            state.memory.authorsNote = state.memory.authorsNote.replace(ISC_SB_NOTE_RX, "").trim();
+            && BK_SB_NOTE_RX.test(state.memory.authorsNote)) {
+            state.memory.authorsNote = state.memory.authorsNote.replace(BK_SB_NOTE_RX, "").trim();
         }
     } catch (e) {}
 }
@@ -1407,20 +1409,20 @@ function ISC_runSlowBurn(hook, text) {
 // Life/Thought cards keep LC's own types (owner's call). IS's Configure
 // card stays Class, untouched. LC ENFORCES card.type on every sync
 // (LC:955), so grooming must have the LAST word each turn — hence the
-// ISC_onOutput passthrough below, wired after LC's output pass.
-function ISC_guestTypeFor(title) {
+// BK_onOutput passthrough below, wired after LC's output pass.
+function BK_guestTypeFor(title) {
     const t = String(title || "");
     if (t === "LIVING CHARACTERS CONFIG" || t === "LIVING CHARACTERS RELATIONSHIPS"
         || t === "THOUGHT CARDS CONFIG") return "LivingCharacters";
     return null;
 }
 
-function ISC_retypeGuestCards() {
+function BK_retypeGuestCards() {
     if (typeof storyCards === "undefined" || !Array.isArray(storyCards)) return;
     for (let i = 0; i < storyCards.length; i++) {
         const c = storyCards[i];
         if (!c || typeof c.title !== "string") continue;
-        const want = ISC_guestTypeFor(c.title);
+        const want = BK_guestTypeFor(c.title);
         if (want && c.type !== want) c.type = want;
     }
 }
@@ -1428,26 +1430,26 @@ function ISC_retypeGuestCards() {
 // Output pass: passthrough groom. LC re-types its cards on every sync and
 // runs before us on output — this pass runs after, so categories stick
 // between turns. Returns text untouched, always (rule 7).
-function ISC_onOutput(text) {
-    try { ISC_retypeGuestCards(); } catch (e) {}
+function BK_onOutput(text) {
+    try { BK_retypeGuestCards(); } catch (e) {}
     return String(text || "");
 }
 
 // Input pass: guest hospitality. Ensures starter cards for guest scripts
 // that expect hand-made ones. Returns text untouched, always (rule 7).
-function ISC_onInput(text) {
-    try { ISC_retypeGuestCards(); } catch (e) {}
+function BK_onInput(text) {
+    try { BK_retypeGuestCards(); } catch (e) {}
     try {
         if (typeof SLOWBURN === "function" && typeof SC_ensure === "function") {
-            const has = (typeof SC_get === "function" && SC_get(ISC_SB_CARD_TITLE))
+            const has = (typeof SC_get === "function" && SC_get(BK_SB_CARD_TITLE))
                 || (typeof SC_find === "function"
                     && SC_find(function (c) { return c && typeof c.entry === "string" && c.entry.indexOf("Evolution Stages") !== -1; }));
             if (!has) {
-                const card = SC_ensure(ISC_SB_CARD_TITLE, {
+                const card = SC_ensure(BK_SB_CARD_TITLE, {
                     type: "Slowburn",
-                    keys: ISC_SB_CARD_TITLE,
-                    entry: ISC_SB_CARD_ENTRY,
-                    description: ISC_SB_CARD_HOWTO
+                    keys: BK_SB_CARD_TITLE,
+                    entry: BK_SB_CARD_ENTRY,
+                    description: BK_SB_CARD_HOWTO
                 });
                 if (card && typeof SC_report === "function") {
                     SC_report("BridgeKit", "seeded SlowBurn's Evolution Stages starter card");
@@ -1460,14 +1462,14 @@ function ISC_onInput(text) {
 
 // Context pass: detect an Inner Self task turn, tell the Check to yield.
 // Returns text untouched, always (rule 7).
-function ISC_onContext(text) {
+function BK_onContext(text) {
     const ctx = String(text || "");
-    try { ISC_retypeGuestCards(); } catch (e) {}   // LC's context sync just ran; re-groom
+    try { BK_retypeGuestCards(); } catch (e) {}   // LC's context sync just ran; re-groom
     try {
-        const why = ISC_isAutoCardsContext(ctx) ? "Auto-Cards turn"
-            : ISC_isSaeControlTurn() ? "Story Arc Engine turn"
-            : ISC_isLcThoughtContext(ctx) ? "LC thought turn"
-            : ISC_isTaskContext(ctx) ? "IS task turn"
+        const why = BK_isAutoCardsContext(ctx) ? "Auto-Cards turn"
+            : BK_isSaeControlTurn() ? "Story Arc Engine turn"
+            : BK_isLcThoughtContext(ctx) ? "LC thought turn"
+            : BK_isTaskContext(ctx) ? "IS task turn"
             : null;
         if (why && typeof GK_markCommandTurn === "function") {
             GK_markCommandTurn();
