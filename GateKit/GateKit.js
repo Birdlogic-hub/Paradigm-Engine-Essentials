@@ -1,4 +1,4 @@
-// ===== GateKit v0.6.2 =====
+// ===== GateKit v0.7.0 =====
 // script by bottledfox
 //
 // Paradigm Engine primitive: THE CHECK.
@@ -56,9 +56,9 @@ const GK_PROMPT = [
     "You are the silent arbiter of player actions. Before narrating, decide the outcome of the player's most recent action based on story consistency and luck.",
     "luck={{LUCK}}",
     "Luck is {{MIN}} min, {{MAX}} max. Luck does not apply to impossible or trivial actions.",
-    "First output EXACTLY one line, deciding difficulty BEFORE the check:",
-    "difficulty=trivial|minor|major|impossible; check=success|partial|fail; skill=name;",
-    "Rules: impossible always fails. Trivial always succeeds. Luck sways only minor and major attempts. Omit the skill field if no skill applies.",
+    "First output EXACTLY one line — name the skill involved, THEN judge its difficulty, THEN the check:",
+    "skill=name; difficulty=trivial|minor|major|impossible; check=success|partial|fail;",
+    "Rules: impossible always fails. Trivial always succeeds. Luck sways only minor and major attempts. Use skill=none when no particular skill applies.",
     "Then continue the story, honoring the verdict.",
     "</SYSTEM>"
 ].join("\n");
@@ -66,12 +66,18 @@ const GK_PROMPT = [
 // Load canary: appears in Console Log / Script Test logs on EVERY hook run.
 // If you don't see this line, the Library isn't attached, saved, or executing.
 try {
-    if (GK_cfg().DEBUG_CONSOLE) log("[GateKit] library loaded (v0.6.2)");
+    if (GK_cfg().DEBUG_CONSOLE) log("[GateKit] library loaded (v0.7.0)");
 } catch (e) {}
 
-// Verdict line emitted by the model (difficulty-first schema). skill optional.
+// Verdict line emitted by the model (v0.7.0 skill-first schema: the model
+// names the skill, then reasons difficulty, then concludes the check —
+// premise before conclusion, now including WHICH premise).
 // Delimiters =/: and separators ;/, accepted — prompt strictly, parse generously.
-const GK_VERDICT_RX = /^\s*difficulty\s*[=:]\s*(trivial|minor|major|impossible)\s*[;,]\s*check\s*[=:]\s*(success|partial|fail)\s*[;,]?\s*(?:skill\s*[=:]\s*([^;\n]+?)\s*[;,]?\s*)?$/im;
+const GK_VERDICT_RX = /^\s*skill\s*[=:]\s*([^;\n]+?)\s*[;,]\s*difficulty\s*[=:]\s*(trivial|minor|major|impossible)\s*[;,]\s*check\s*[=:]\s*(success|partial|fail)\s*[;,]?\s*$/im;
+
+// v0.4–v0.6 order (difficulty-first, skill optional trailing), still accepted —
+// models echo old context, and skill-less rulings arrive in this shape.
+const GK_VERDICT_RX_DFIRST = /^\s*difficulty\s*[=:]\s*(trivial|minor|major|impossible)\s*[;,]\s*check\s*[=:]\s*(success|partial|fail)\s*[;,]?\s*(?:skill\s*[=:]\s*([^;\n]+?)\s*[;,]?\s*)?$/im;
 // Legacy order (check-first), still accepted — models sometimes echo old context.
 const GK_VERDICT_RX_LEGACY = /^\s*check\s*[=:]\s*(success|partial|fail)\s*[;,]\s*difficulty\s*[=:]\s*(trivial|minor|major|impossible)\s*[;,]?\s*(?:skill\s*[=:]\s*([^;\n]+?)\s*[;,]?\s*)?$/im;
 
@@ -244,29 +250,29 @@ function GK_onOutput(text) {
     let out = String(text || "");
     GK_DEBUG_RAW = out;
 
-    let m = out.match(GK_VERDICT_RX);
-    let legacy = false;
-    if (!m) {
-        m = out.match(GK_VERDICT_RX_LEGACY);
-        legacy = true;
-    }
+    let m = out.match(GK_VERDICT_RX);            // v0.7 skill-first
+    let dialect = "skillFirst";
+    if (!m) { m = out.match(GK_VERDICT_RX_DFIRST); dialect = "difficultyFirst"; }
+    if (!m) { m = out.match(GK_VERDICT_RX_LEGACY); dialect = "legacy"; }
     if (!m) {
         // Near-miss detector: an attempted verdict in a dialect we don't parse
         // yet. Strip it anyway (scaffolding must never reach the player) and
         // log it verbatim so each model rotation reports its own format.
         const first = out.split("\n").find(l => l.trim()) || "";
         if (first.length < 160
-            && /\b(difficulty|check)\s*[-=:]/i.test(first)
+            && /\b(difficulty|check|skill)\s*[-=:]/i.test(first)
             && /\b(trivial|minor|major|impossible|success|partial|fail)\b/i.test(first)) {
             GK_log("UNPARSED verdict-like line (add to parser): \"" + first.trim() + "\"");
             out = out.replace(first, "").replace(/\n{3,}/g, "\n\n").trim();
         }
     }
     if (m) {
-        let result = (legacy ? m[1] : m[2]).toLowerCase();
-        const difficulty = (legacy ? m[2] : m[1]).toLowerCase();
+        // Per-dialect group mapping: skillFirst = s/d/c, difficultyFirst = d/c/s, legacy = c/d/s
+        let result = (dialect === "skillFirst" ? m[3] : dialect === "legacy" ? m[1] : m[2]).toLowerCase();
+        const difficulty = (dialect === "skillFirst" ? m[2] : dialect === "legacy" ? m[2] : m[1]).toLowerCase();
+        const rawSkill = dialect === "skillFirst" ? m[1] : m[3];
         // Normalize non-skills to null ("none", "n/a", "-", "null", "nothing")
-        let skill = m[3] ? m[3].trim().toLowerCase() : null;
+        let skill = rawSkill ? rawSkill.trim().toLowerCase() : null;
         if (skill && /^(none|n\/a|na|null|nothing|-+)$/.test(skill)) skill = null;
         // Deterministic backstop for contradictory rulings (seen live: success/impossible)
         if (difficulty === "impossible" && result !== "fail") {

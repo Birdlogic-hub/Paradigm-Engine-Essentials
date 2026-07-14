@@ -9,7 +9,7 @@ let ctx = GK_onContext(H.ctx());
 H.assert(ctx.endsWith("</SYSTEM>") && /luck=\d+/.test(ctx), "arbiter block at context tail with luck");
 H.assert(state.memory.frontMemory === undefined, "frontMemory never touched");
 H.assert(!!SC_get("Event Log"), "Event Log materializes on first input (rule 11)");
-let out = GK_onOutput("difficulty=minor; check=partial; skill=climbing;\nHalfway up.");
+let out = GK_onOutput("skill=climbing; difficulty=minor; check=partial;\nHalfway up.");   // v0.7 skill-first
 H.assert(GK_lastCheck().result === "partial" && GK_lastCheck().skill === "climbing", "verdict captured");
 H.assert(!/difficulty=/.test(out), "verdict stripped from prose");
 
@@ -47,7 +47,7 @@ H.resetCaches();
 // Event Log reporting
 H.turn(7, "do");
 GK_onInput(H.doFrame("You pick the lock"));
-GK_onOutput("difficulty=major; check=success; skill=lockpicking;\nClick.");
+GK_onOutput("difficulty=major; check=success; skill=lockpicking;\nClick.");   // v0.4-v0.6 dialect still parsed
 H.assert(/T7 \[GateKit\] ruling: major difficulty → success \(lockpicking\)/.test(SC_get("Event Log").entry), "ruling posted to Event Log");
 
 // State migration sweeps
