@@ -126,6 +126,16 @@ global.SLOWBURN = function (hook, t) {
 ISC_onInput(H.doFrame("look around"));
 const evo = SC_get("Evolution Stages");
 H.assert(!!evo && /^Character Name:$/m.test(evo.entry) && /^0: /m.test(evo.entry), "starter card seeded as ready-to-fill form (blank name, live-ready ladder)");
+H.assert(evo.type === "Slowburn", "Evolution Stages categorized under Slowburn");
+
+// Guest categories: LC cards re-typed to their source; IS's Class card untouched
+storyCards.push({ id: "51", title: "LIVING CHARACTERS CONFIG", keys: "x1", type: "Config", entry: "", description: "" });
+storyCards.push({ id: "52", title: "Life - Marcus", keys: "x2", type: "Custom", entry: "", description: "" });
+storyCards.push({ id: "53", title: "Winter - Thoughts", keys: "x3", type: "Custom", entry: "", description: "" });
+storyCards.push({ id: "54", title: "Configure Inner Self", keys: "x4", type: "Class", entry: "", description: "" });
+ISC_onInput(H.doFrame("look"));
+H.assert(SC_get("LIVING CHARACTERS CONFIG").type === "Living Characters" && SC_get("Life - Marcus").type === "Living Characters" && SC_get("Winter - Thoughts").type === "Living Characters", "LC cards categorized under Living Characters");
+H.assert(SC_get("Configure Inner Self").type === "Class", "IS Class card untouched");
 H.assert(/T15 \[BridgeKit\] seeded SlowBurn/.test(SC_get("Event Log").entry), "seeding posted to Event Log");
 
 // Dormant: SB never runs; a leftover block gets scrubbed from the Author's Note

@@ -168,8 +168,13 @@ function RX_keyValue(line) {
     return { key: m[1].trim(), value: m[2].trim() };
 }
 
-// ===== CardLib v0.3.2 =====
-// (né ParaCards, renamed 7/14/2026 — same module, same SC_ prefix, same versions)
+// ===== CardLib v0.4.0 =====
+// (né ParaCards, renamed 7/14/2026 — same module, same SC_ prefix)
+// v0.4.0: card categories. The story-card panel groups by TYPE, so type is
+// part of the projection: SC_ensure now HEALS type (a card that drifts from
+// its declared category is re-typed, same doctrine as config-line healing).
+// House categories: config cards default to "Paradigm Config"; the Event
+// Log is "Log". Callers override per card (Inventory owns "Inventory").
 // script by bottledfox
 //
 // Paradigm Engine primitive: THE PROJECTION.
@@ -201,7 +206,7 @@ const SC_ALWAYS_ON = ".";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[CardLib] library loaded (v0.3.2)");
+    if (typeof log === "function") log("[CardLib] library loaded (v0.4.0)");
 } catch (e) {}
 
 // --- Lookup ---------------------------------------------------------------------
@@ -230,7 +235,11 @@ function SC_indexOf(title) {
 function SC_ensure(title, opts) {
     opts = opts || {};
     let card = SC_get(title);
-    if (card) return card;
+    if (card) {
+        // Type is part of the projection: heal category drift (v0.4.0).
+        if (opts.type && card.type !== opts.type) card.type = String(opts.type);
+        return card;
+    }
     addStoryCard(title, String(opts.entry || ""), opts.type || "Custom");
     card = SC_get(title);
     if (!card) return null;   // platform refused (duplicate keys elsewhere)
@@ -297,7 +306,7 @@ function SC_config(title, defaults, opts) {
     if (!card) {
         const lines = Object.keys(defaults).map(k => SC_labelFor(k) + ": " + String(defaults[k]));
         card = SC_ensure(title, {
-            type: opts.type || "config",
+            type: opts.type || "Paradigm Config",
             keys: opts.keys || title,
             entry: header + "\n\n" + lines.join("\n"),
             description: opts.description || ""
@@ -411,7 +420,7 @@ const SC_REPORT_HEADER = "# Event Log — most recent first";
 // empty log card, header only, instead of a card that hides until first post.
 function SC_reportEnsure() {
     return SC_ensure(SC_REPORT_CARD, {
-        type: "report",
+        type: "Log",
         keys: SC_REPORT_CARD,
         entry: SC_REPORT_HEADER,
         description: "The engine's event log: the last " + SC_REPORT_EVENTS
@@ -887,6 +896,7 @@ function INV_cfg() {
     if (typeof SC_config === "function") {
         try {
             cfg = SC_config("Inventory Config", INV_SETTINGS, {
+                type: "Inventory",
                 description: "Settings for the Inventory module. Arbitration per verb: "
                     + "none (bookkeeping only), outcome (deed certain, consequences judged), "
                     + "gated (nothing happens unless the ruling allows it). "
@@ -983,7 +993,7 @@ function INV_renderCard() {
     const names = Object.keys(counts).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     const iLines = names.length ? names.map(n => "- " + n + " x " + counts[n]) : ["- (empty)"];
     const entry = "## Wallet\n" + wLines.join("\n") + "\n\n## Inventory\n" + iLines.join("\n");
-    const card = SC_render("Inventory", entry, { type: "list", keys: "Inventory" });
+    const card = SC_render("Inventory", entry, { type: "Inventory", keys: "Inventory" });
     if (card) {
         const wantKeys = INV_cfg().INVENTORY_IN_CONTEXT
             ? (typeof SC_ALWAYS_ON === "string" ? SC_ALWAYS_ON : ".")

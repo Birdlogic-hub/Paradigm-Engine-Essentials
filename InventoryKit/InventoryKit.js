@@ -77,6 +77,7 @@ function INV_cfg() {
     if (typeof SC_config === "function") {
         try {
             cfg = SC_config("Inventory Config", INV_SETTINGS, {
+                type: "Inventory",
                 description: "Settings for the Inventory module. Arbitration per verb: "
                     + "none (bookkeeping only), outcome (deed certain, consequences judged), "
                     + "gated (nothing happens unless the ruling allows it). "
@@ -173,7 +174,7 @@ function INV_renderCard() {
     const names = Object.keys(counts).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     const iLines = names.length ? names.map(n => "- " + n + " x " + counts[n]) : ["- (empty)"];
     const entry = "## Wallet\n" + wLines.join("\n") + "\n\n## Inventory\n" + iLines.join("\n");
-    const card = SC_render("Inventory", entry, { type: "list", keys: "Inventory" });
+    const card = SC_render("Inventory", entry, { type: "Inventory", keys: "Inventory" });
     if (card) {
         const wantKeys = INV_cfg().INVENTORY_IN_CONTEXT
             ? (typeof SC_ALWAYS_ON === "string" ? SC_ALWAYS_ON : ".")

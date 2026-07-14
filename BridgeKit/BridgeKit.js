@@ -1,4 +1,4 @@
-// ===== BridgeKit v0.5.1 =====
+// ===== BridgeKit v0.6.0 =====
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -91,7 +91,7 @@ const ISC_LC_THOUGHT_MARKER = "Begin your reply with ONE short parenthetical";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[BridgeKit] library loaded (v0.5.1)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.6.0)");
 } catch (e) {}
 
 function ISC_isTaskContext(ctx) {
@@ -195,9 +195,34 @@ function ISC_runSlowBurn(hook, text) {
     } catch (e) {}
 }
 
+// Guest card categories (v0.6.0): the panel groups by type, so guests get
+// source-named categories. LC finds its cards by TITLE, never type — but it
+// recreates Thought Cards on update, so this re-types every input pass
+// (cheap: writes only on drift). IS's "Configure Inner Self" stays untouched
+// (Class), per the owner's call.
+function ISC_guestTypeFor(title) {
+    const t = String(title || "");
+    if (t === "LIVING CHARACTERS CONFIG" || t === "LIVING CHARACTERS RELATIONSHIPS"
+        || t === "THOUGHT CARDS CONFIG") return "Living Characters";
+    if (t.indexOf("Life - ") === 0) return "Living Characters";
+    if (/ - Thoughts$/.test(t)) return "Living Characters";   // incl. the marked "💭 Name - Thoughts"
+    return null;
+}
+
+function ISC_retypeGuestCards() {
+    if (typeof storyCards === "undefined" || !Array.isArray(storyCards)) return;
+    for (let i = 0; i < storyCards.length; i++) {
+        const c = storyCards[i];
+        if (!c || typeof c.title !== "string") continue;
+        const want = ISC_guestTypeFor(c.title);
+        if (want && c.type !== want) c.type = want;
+    }
+}
+
 // Input pass: guest hospitality. Ensures starter cards for guest scripts
 // that expect hand-made ones. Returns text untouched, always (rule 7).
 function ISC_onInput(text) {
+    try { ISC_retypeGuestCards(); } catch (e) {}
     try {
         if (typeof SLOWBURN === "function" && typeof SC_ensure === "function") {
             const has = (typeof SC_get === "function" && SC_get(ISC_SB_CARD_TITLE))
@@ -205,7 +230,7 @@ function ISC_onInput(text) {
                     && SC_find(function (c) { return c && typeof c.entry === "string" && c.entry.indexOf("Evolution Stages") !== -1; }));
             if (!has) {
                 const card = SC_ensure(ISC_SB_CARD_TITLE, {
-                    type: "config",
+                    type: "Slowburn",
                     keys: ISC_SB_CARD_TITLE,
                     entry: ISC_SB_CARD_ENTRY,
                     description: ISC_SB_CARD_HOWTO
