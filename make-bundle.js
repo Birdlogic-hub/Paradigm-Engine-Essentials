@@ -10,3 +10,14 @@ const out = MODULES
     .join("\n\n") + "\n";
 fs.writeFileSync(path.join(__dirname, "PE Essentials - Library.js"), out);
 console.log("bundle: " + MODULES.join(" + ") + " -> PE Essentials - Library.js (" + out.length + " chars)");
+
+// IS-fork Library (example_Lib.js): Essentials + ISCompat + pinned Inner Self.
+// Only built when the pinned copy is reachable (workspace layout).
+const IS_PINNED = path.join(__dirname, "..", "..", "Third Party", "Inner Self", "Inner Self v1.0.2 - Library.js");
+if (fs.existsSync(IS_PINNED)) {
+    const isc = fs.readFileSync(path.join(__dirname, "ISCompat", "ISCompat.js"), "utf-8").trimEnd();
+    const is = fs.readFileSync(IS_PINNED, "utf-8").trimEnd();
+    const fork = out + "\n" + isc + "\n\n" + is + "\n";
+    fs.writeFileSync(path.join(__dirname, "example_Lib.js"), fork);
+    console.log("IS fork: bundle + ISCompat + Inner Self v1.0.2 -> example_Lib.js (" + fork.length + " chars)");
+}

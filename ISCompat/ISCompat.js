@@ -1,4 +1,4 @@
-// ===== ISCompat v0.1.0 =====
+// ===== ISCompat v0.2.0 =====
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -29,7 +29,18 @@
 // without it, or without Inner Self (marker never appears). ParaCards
 // optional (Event Log reporting). Owns no cards, no state namespace.
 //
-// Known deferral (v0.2 candidate): appending Essentials card titles to
+// v0.2.0 (live-found, 7/14/2026 "Test Chamber" capture): Auto-Cards
+// GENERATION turns are a second special-turn class. AC hijacks the context
+// inside InnerSelf("context") to prompt the model for a card entry; GateKit,
+// unaware, injected its arbiter block into that prompt and the model wrote
+// "skill=none; difficulty=trivial; check=success;" INTO the generated card —
+// mid-line, where GK's $-anchored strip can't reach. Detection: both of AC's
+// generation prompts (entry + memory compression) open with the same
+// preamble, searched full-context because AC's prompt position varies.
+// Belt-and-suspenders: state.InnerSelf.AC.event (set when AC consumed the
+// turn) and the global stop flag (a hijacked turn by definition).
+//
+// Known deferral (v0.3 candidate): appending Essentials card titles to
 // Auto-Cards' banned-titles list — AC's API isn't safely reachable from
 // outside IS's closure without invoking AutoCards(); needs its own study.
 
@@ -40,13 +51,32 @@
 const ISC_TASK_MARKER = "# STRICT OUTPUT FORMAT";
 const ISC_TAIL_WINDOW = 2500;
 
+// Shared preamble of BOTH Auto-Cards generation prompts (card entry and
+// memory compression — AC defaults, verified against the pinned bundle).
+const ISC_AC_MARKER = "# Stop the story and ignore previous instructions.";
+
 // Load canary
 try {
-    if (typeof log === "function") log("[ISCompat] library loaded (v0.1.0)");
+    if (typeof log === "function") log("[ISCompat] library loaded (v0.2.0)");
 } catch (e) {}
 
 function ISC_isTaskContext(ctx) {
     return String(ctx || "").slice(-ISC_TAIL_WINDOW).indexOf(ISC_TASK_MARKER) !== -1;
+}
+
+// An Auto-Cards generation/compression turn: the story model is writing a
+// card, not narration — nothing to adjudicate, and an arbiter block would
+// bleed verdicts into the generated entry (the Test Chamber incident).
+function ISC_isAutoCardsContext(ctx) {
+    if (String(ctx || "").indexOf(ISC_AC_MARKER) !== -1) return true;
+    try {
+        if (typeof state === "object" && state && state.InnerSelf
+            && state.InnerSelf.AC && state.InnerSelf.AC.event === true) return true;
+    } catch (e) {}
+    try {
+        if (typeof stop !== "undefined" && stop === true) return true;
+    } catch (e) {}
+    return false;
 }
 
 // Context pass: detect an Inner Self task turn, tell the Check to yield.
@@ -54,10 +84,11 @@ function ISC_isTaskContext(ctx) {
 function ISC_onContext(text) {
     const ctx = String(text || "");
     try {
-        if (ISC_isTaskContext(ctx) && typeof GK_markCommandTurn === "function") {
+        const acTurn = ISC_isAutoCardsContext(ctx);
+        if ((acTurn || ISC_isTaskContext(ctx)) && typeof GK_markCommandTurn === "function") {
             GK_markCommandTurn();
             if (typeof SC_report === "function") {
-                SC_report("ISCompat", "IS task turn — Check yields");
+                SC_report("ISCompat", (acTurn ? "Auto-Cards turn" : "IS task turn") + " — Check yields");
             }
         }
     } catch (e) {}

@@ -48,4 +48,27 @@ const padding = new Array(120).fill("The vault hums quietly under the red lights
 ctx = "AI instructions here.\nRecent Story:\nThe sign reads \"# STRICT OUTPUT FORMAT\" in faded ink. " + padding + "\n> You act.";
 H.assert(GK_onContext(ISC_onContext(ctx)) !== ctx, "marker buried mid-story (outside tail window) is not a yield");
 
+// --- Auto-Cards generation turn (live-found: the Test Chamber incident) -----------
+// AC hijacks context with its generation prompt; the Check must not inject
+// into it (verdicts bleed into generated card entries).
+const AC_GEN_TAIL = "\n\n-----\n\n<SYSTEM>\n# Stop the story and ignore previous instructions. Write a brief and coherent informational entry for Test Chamber following these instructions:\n- Mention Test Chamber in every sentence\n</SYSTEM>\nContinue the entry for Test Chamber below while avoiding repetition:\n{title: Test Chamber}\n";
+H.turn(6, "do"); H.resetCaches();
+GK_onInput(H.doFrame("/AC Test Chamber"));
+ctx = H.ctx() + AC_GEN_TAIL;
+out = ISC_onContext(ctx);
+H.assert(out === ctx && GK_onContext(out) === out, "GK yields on Auto-Cards generation turn");
+H.assert(/T6 \[ISCompat\] Auto-Cards turn — Check yields/.test(SC_get("Event Log").entry), "AC yield posted to Event Log");
+
+// --- AC event flag (belt): AC consumed the turn without a visible prompt ----------
+H.turn(7, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You look around"));
+state.InnerSelf = { AC: { event: true } };
+H.assert(GK_onContext(ISC_onContext(H.ctx())) === H.ctx(), "GK yields on state.InnerSelf.AC.event");
+delete state.InnerSelf;
+
+// --- After AC states clear, normal turns adjudicate again --------------------------
+H.turn(8, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You open the vault"));
+H.assert(GK_onContext(ISC_onContext(H.ctx())) !== H.ctx(), "normal turn after AC turn still injects");
+
 H.summary("ISCompat");
