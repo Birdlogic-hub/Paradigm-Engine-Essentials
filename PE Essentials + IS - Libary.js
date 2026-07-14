@@ -807,6 +807,7 @@ function GK_onOutputDebug(text) {
 }
 // ========================== END GK DEBUG SECTION ===============================
 
+
 // ===== SlashInventory v0.1.2 =====
 // script by bottledfox
 //
@@ -1289,8 +1290,6 @@ function ISC_onContext(text) {
     } catch (e) {}
     return ctx;
 }
-
-// Your "Library" tab should look like this
 
 /**
  * Main control panel for scenario creator convenience
