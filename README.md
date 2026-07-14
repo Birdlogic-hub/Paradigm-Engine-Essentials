@@ -1,16 +1,39 @@
 # Paradigm Engine Essentials
 
-Engine Modules
+A modular scripting engine for [AI Dungeon](https://aidungeon.com): four small modules that work alone or together, plus ready-to-paste bundles.
 
-ParaCards — Story card projection and configuration.
-RegexLib — Shared parsing and command grammar.
-GateKit — Silent action adjudication and skill checks.
-SlashInventory — Deterministic inventory and currency management.
+## Engine Modules
 
-**Installation:**
+- **RegexLib** — Shared parsing and command grammar.
+- **ParaCards** — Story card projection and configuration.
+- **GateKit** — Silent action adjudication and skill checks.
+- **SlashInventory** — Deterministic inventory and currency management.
+- **ISCompat** — Compatibility shim for running the Essentials alongside [Inner Self](https://github.com/LewdLeah/Inner-Self) (included only in the Inner Self bundle).
 
-Download the four PE Essentials.js files and paste them into their related scripting hook.
+## Installation
 
-**Player Guides**
+Each scenario has four scripting tabs (Library, Input, Context, Output). Pick ONE flavor:
+
+**PE Essentials (standalone):** paste the four `PE Essentials - *.js` files into their matching tabs.
+
+**PE Essentials + Inner Self:** paste the four `PE Essentials + IS - *.js` files into their matching tabs. This bundle already includes Inner Self v1.0.2 with Auto-Cards — do not also install Inner Self separately.
+
+Editable settings appear in-game as story cards (`GateKit Config`, `Inventory Config`) from your first action; the `Event Log` card shows what the engine is doing as you play.
+
+## Player Guides
 
 The *GateKit* and *SlashInventory* folders contain guides for how to use either module.
+
+## Development
+
+Module sources live one folder per module; the paste bundles are generated — never edit bundles directly:
+
+```
+node make-bundle.js   # regenerates both Library bundles from module sources
+node test/run.js      # runs all harness suites (also runs in CI on every push)
+```
+
+## Credits & licenses
+
+- Paradigm Engine Essentials by **bottledfox** — see [LICENSE](LICENSE).
+- The `PE Essentials + IS` bundle redistributes **[Inner Self](https://github.com/LewdLeah/Inner-Self) v1.0.2 (with bundled Auto-Cards) by LewdLeah**, pinned unmodified — free and open source, all credit to her. If you only want Inner Self, get it from her repository.
