@@ -1195,7 +1195,7 @@ function INV_onOutput(text) {
     return out;
 }
 
-// ===== BridgeKit v0.4.0 =====
+// ===== BridgeKit v0.5.0 =====
 // script by bottledfox
 //
 // Paradigm Engine compatibility shim: Inner Self (LewdLeah, pinned v1.0.2)
@@ -1250,11 +1250,19 @@ function INV_onOutput(text) {
 // v0.4.0: HOSPITALITY — rule 11 applied on behalf of guests. SlowBurn reads
 // its config from a player-authored card (any entry containing "Evolution
 // Stages") and its own docs make the player build it by hand. We can't add
-// ensure-on-input to a guest, but we can seed the card FOR it: ISC_onInput
-// materializes a starter Evolution Stages card (via CardLib) when SlowBurn
-// is present and no such card exists — player edits the details, SB finds
-// it exactly as if hand-made. Skipped entirely when the player already has
-// one (SB scans ALL matching cards; duplicates would fight).
+// ensure-on-input to a guest, but we can seed the card FOR it. Skipped
+// entirely when the player already has one (SB scans ALL matching cards;
+// duplicates would fight).
+//
+// v0.5.0 (live-found: the manifested-Companion incident): SlowBurn writes
+// "[Companion's State: ...]" into the Author's Note UNCONDITIONALLY — its
+// default identity leaks into the fiction and the narrator conjures a
+// companion who was never in the story. The seeded card is now BLANK (the
+// template lives in its description, inert — SB's regexes aren't anchored,
+// so template text in the ENTRY would parse as live config), and the card
+// is a SUGGESTION until filled: hook tabs call ISC_runSlowBurn(), which
+// runs SB only when a filled card exists (Character Name present) and
+// scrubs SB's block from the Author's Note while dormant.
 //
 // Known deferral (v0.5 candidate): appending Essentials card titles to
 // Auto-Cards' banned-titles list — AC's API isn't safely reachable from
@@ -1277,7 +1285,7 @@ const ISC_LC_THOUGHT_MARKER = "Begin your reply with ONE short parenthetical";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[BridgeKit] library loaded (v0.4.0)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.5.0)");
 } catch (e) {}
 
 function ISC_isTaskContext(ctx) {
@@ -1328,34 +1336,62 @@ function ISC_isSaeControlTurn() {
 // lines + "level: Stage - description" ladder, parsed by its regexes
 // (Character Name/Gain Rate/Drain Rate, /^(\d+):\s*(.*)/ per stage).
 const ISC_SB_CARD_TITLE = "Evolution Stages";
-const ISC_SB_CARD_ENTRY = [
-    "Evolution Stages Part 1:",
-    "Character Name: Companion",
-    "Gain Rate: 0.2",
-    "Drain Rate: 0.5",
-    "0: The Default - Standard, polite behavior towards you.",
-    "15: Warming Up - Friendlier; seeks out small moments of conversation.",
-    "35: Trusting - Shares thoughts unprompted; relies on you in a pinch.",
-    "60: Close - Openly affectionate; takes risks on your behalf.",
-    "85: Devoted - Unshakable loyalty; your goals are their goals."
-].join("\n");
+// ENTRY stays blank — SB's parsers aren't line-anchored, so any template
+// text here would be read as live config. The template ships in the
+// description, where SB never looks.
+const ISC_SB_CARD_ENTRY = "";
+const ISC_SB_CARD_HOWTO = "SlowBurn is DORMANT until you fill this card's Entry. Template (copy "
+    + "into Entry, then edit): Evolution Stages Part 1: / Character Name: <NPC> / "
+    + "Gain Rate: 0.2 / Drain Rate: 0.5 / then stages, one per line, like "
+    + "'0: The Default - polite behavior' and '35: Trusting - shares thoughts unprompted' "
+    + "(each line = level: Stage - description). SlowBurn wakes when Character Name is set.";
+
+// SB's own Author's Note block shape (verbatim from its source) — used to
+// scrub the note while SB is dormant.
+const ISC_SB_NOTE_RX = /\[.*?'s State:.*?\]|\[EVO:.*?\]/g;
+
+// Configured = some card carries the header AND a non-empty Character Name.
+function ISC_slowburnConfigured() {
+    if (typeof SC_find !== "function") return false;
+    try {
+        return !!SC_find(function (c) {
+            return c && typeof c.entry === "string"
+                && c.entry.indexOf("Evolution Stages") !== -1
+                && /Character Name:\s*\S/i.test(c.entry);
+        });
+    } catch (e) { return false; }
+}
+
+// The leash: hook tabs call this INSTEAD of SLOWBURN directly. Dormant
+// until the card is filled; while dormant, SB's default-identity block
+// ("[Companion's State: ...]") is scrubbed from the Author's Note so the
+// narrator never manifests a companion nobody wrote.
+function ISC_runSlowBurn(hook, text) {
+    try {
+        if (typeof SLOWBURN !== "function") return;
+        if (ISC_slowburnConfigured()) {
+            SLOWBURN(hook, text);
+        } else if (state && state.memory && typeof state.memory.authorsNote === "string"
+            && ISC_SB_NOTE_RX.test(state.memory.authorsNote)) {
+            state.memory.authorsNote = state.memory.authorsNote.replace(ISC_SB_NOTE_RX, "").trim();
+        }
+    } catch (e) {}
+}
 
 // Input pass: guest hospitality. Ensures starter cards for guest scripts
 // that expect hand-made ones. Returns text untouched, always (rule 7).
 function ISC_onInput(text) {
     try {
         if (typeof SLOWBURN === "function" && typeof SC_ensure === "function") {
-            const has = typeof SC_find === "function"
-                && SC_find(function (c) { return c && typeof c.entry === "string" && c.entry.indexOf("Evolution Stages") !== -1; });
+            const has = (typeof SC_get === "function" && SC_get(ISC_SB_CARD_TITLE))
+                || (typeof SC_find === "function"
+                    && SC_find(function (c) { return c && typeof c.entry === "string" && c.entry.indexOf("Evolution Stages") !== -1; }));
             if (!has) {
                 const card = SC_ensure(ISC_SB_CARD_TITLE, {
                     type: "config",
                     keys: ISC_SB_CARD_TITLE,
                     entry: ISC_SB_CARD_ENTRY,
-                    description: "SlowBurn starter card (seeded by BridgeKit). Edit Character Name "
-                        + "to the NPC you want tracked, tune the rates, and rewrite the stages — "
-                        + "SlowBurn reads this card every turn. Add 'Evolution Stages Part 2:' "
-                        + "cards if you outgrow this one."
+                    description: ISC_SB_CARD_HOWTO
                 });
                 if (card && typeof SC_report === "function") {
                     SC_report("BridgeKit", "seeded SlowBurn's Evolution Stages starter card");

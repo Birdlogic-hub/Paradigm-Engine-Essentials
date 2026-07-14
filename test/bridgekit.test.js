@@ -117,12 +117,29 @@ H.assert(GK_onContext(ISC_onContext(H.ctx())) !== H.ctx(), "normal turn after LC
 H.turn(15, "do"); H.resetCaches();
 H.assert(ISC_onInput(H.doFrame("look around")) === H.doFrame("look around"), "ISC_onInput returns text untouched");
 H.assert(!SC_get("Evolution Stages"), "no SlowBurn, no seeding");
-global.SLOWBURN = function () {};
+let sbCalls = 0;
+global.SLOWBURN = function (hook, t) {
+    sbCalls++;
+    // faithful to SB's real behavior: writes its block unconditionally
+    state.memory.authorsNote = ((state.memory.authorsNote || "") + " [Companion's State: Normal behavior. (0.0/100)]").trim();
+};
 ISC_onInput(H.doFrame("look around"));
 const evo = SC_get("Evolution Stages");
-H.assert(!!evo && /Character Name: Companion/.test(evo.entry) && /^0: /m.test(evo.entry), "SlowBurn present: starter card seeded in SB's documented format");
+H.assert(!!evo && evo.entry === "" && /DORMANT/.test(evo.description), "starter card seeded BLANK — template lives in description");
 H.assert(/T15 \[BridgeKit\] seeded SlowBurn/.test(SC_get("Event Log").entry), "seeding posted to Event Log");
-evo.entry = evo.entry.replace("Companion", "Winter");   // player edits
+
+// Dormant: SB never runs; a leftover block gets scrubbed from the Author's Note
+state.memory.authorsNote = "Keep the tone grim. [Companion's State: Normal behavior. (0.0/100)]";
+ISC_runSlowBurn("output", "Some story text.");
+H.assert(sbCalls === 0, "blank card = suggestion: SLOWBURN not invoked");
+H.assert(state.memory.authorsNote === "Keep the tone grim.", "dormant scrub removes SB's block, preserves the player's note");
+
+// Filled: SB runs
+evo.entry = "Evolution Stages Part 1:\nCharacter Name: Winter\nGain Rate: 0.2\nDrain Rate: 0.5\n0: The Default - polite.";
+ISC_runSlowBurn("output", "Winter smiles at you warmly.");
+H.assert(sbCalls === 1, "filled card wakes SlowBurn");
+
+// Player edits survive re-ensure; player's own card blocks seeding
 ISC_onInput(H.doFrame("again"));
 H.assert(/Winter/.test(SC_get("Evolution Stages").entry), "player edits survive re-ensure");
 SC_remove("Evolution Stages");
