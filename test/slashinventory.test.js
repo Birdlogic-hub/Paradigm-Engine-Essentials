@@ -12,6 +12,12 @@ function play(n, input, modelOut) {
   return { t, out };
 }
 
+// Turn 1 materialization (EB ensure-on-input lineage): both cards exist on
+// the first player action, before any command is ever issued.
+H.turn(0, "do"); H.resetCaches();
+INV_onInput(H.doFrame("look around"));
+H.assert(!!SC_get("Inventory Config") && !!SC_get("Inventory"), "cards materialize on first action, pre-command");
+
 let r = play(1, H.doFrame("/take 3 torches"), "difficulty=trivial; check=success;\nGathered.");
 H.assert(r.t === "You take 3 torches." && INV_count("torches") === 3, "take: stub + optimistic commit kept");
 r = play(2, H.doFrame("/take golden idol"), "difficulty=major; check=fail;\nAir.");
