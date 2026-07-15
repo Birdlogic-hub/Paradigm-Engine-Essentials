@@ -30,5 +30,5 @@ SOFTWARE.
 ## Inner Self + Auto-Cards (LewdLeah)
 Bundled unmodified in `PE Characters - Library.txt`. Upstream: https://github.com/LewdLeah/Inner-Self — "free and open-source for anyone... full permission to use, copy, or modify" (per its in-script guide).
 
-## SlowBurn (unknown community author)
-Bundled unmodified in `PE Characters - Library.txt`. No license or author attribution was distributed with it. Author: contact us for credit or removal.
+## SlowBurn (saya-evrlc)
+Bundled unmodified in `PE Characters - Library.txt`. Upstream: https://github.com/saya-evrlc/Slowburn (author identified 7/15/2026; the repo publishes no license file, so explicit redistribution permission is not yet on record). Bundled with credit; removed immediately on the author's request.

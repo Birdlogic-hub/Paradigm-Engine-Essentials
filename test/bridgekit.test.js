@@ -170,4 +170,104 @@ BK_onInput(H.doFrame("once more"));
 H.assert(!SC_get("Evolution Stages"), "player's own Evolution Stages card blocks seeding (no duplicates)");
 delete global.SLOWBURN;
 
+// ===== the INTRODUCTION (v0.8.0): character auto-registration =====================
+// Fixtures follow the pins: AC inserts generated cards at the FRONT of
+// storyCards (IS:7711) with type "class" (AC DEFAULT_CARD_TYPE); IS registers
+// any card titled @Name (IS:704). LC's roster lives in its config card NOTES.
+
+// Rule 11: the config card materialized on Turn 1's input pass, default off
+H.turn(16, "do"); H.resetCaches();
+BK_onInput(H.doFrame("look"));
+const bkCfg = SC_get("BridgeKit Config");
+H.assert(!!bkCfg && /Auto Register: false/.test(bkCfg.entry), "BridgeKit Config materializes with Auto Register: false");
+
+// Opt-in gate: AC generates a character card, but the switch is off -> nothing
+H.turn(17, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You enter the keep"));
+state.InnerSelf = { AC: { event: true } };
+BK_onOutput("prime the snapshot");   // snap now holds current class titles
+storyCards.unshift({ id: "60", title: "Mara", keys: "Mara", type: "class",
+    entry: "She is a wandering knight. Her blade is notched and she guards those who cannot protect themselves. They say her temper burns slow.", description: "" });
+BK_onContext(H.ctx());
+BK_onOutput("The knight introduces herself as Mara.");
+H.assert(SC_get("Mara") && !SC_get("@Mara"), "Auto Register off: no @-retitle");
+H.assert(!/introduced/.test(SC_get("Event Log").entry), "Auto Register off: no introduction reported");
+
+// Flip the switch (live card edit bites, config-card precedent)
+bkCfg.entry = bkCfg.entry.replace("Auto Register: false", "Auto Register: true");
+
+// The arrival: AC turn -> scan on output -> IS @-protocol + LC guestbook + report
+H.turn(18, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You greet the knight"));
+storyCards.splice(0, 1);                     // retract turn 17's Mara...
+BK_onOutput("prime snap for this turn");     // ...so the snapshot is Mara-free
+BK_onContext(H.ctx());                       // AC.event still set -> scan flagged
+storyCards.unshift({ id: "61", title: "Mara", keys: "Mara", type: "class",
+    entry: "She is a wandering knight. Her blade is notched and she guards those who cannot protect themselves. They say her temper burns slow.", description: "" });
+BK_onOutput("Mara bows.");
+H.assert(!!SC_get("@Mara"), "IS leg: card retitled @Mara (IS strips it and registers on next scan)");
+H.assert(/(^|\n)Mara(\n|$)/.test(SC_get("LIVING CHARACTERS CONFIG").description), "LC leg: Mara appended to roster NOTES");
+H.assert(/introduced "Mara" — IS\+LC/.test(SC_get("Event Log").entry), "introduction posted to Event Log");
+
+// Reversibility: player removes the roster line; Mara is never re-added
+SC_get("@Mara").title = "Mara";              // simulate IS stripping the @
+SC_get("LIVING CHARACTERS CONFIG").description = SC_get("LIVING CHARACTERS CONFIG").description.replace(/(^|\n)Mara(\n|$)/, "$1").trim();
+H.turn(19, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You move on"));
+BK_onContext(H.ctx());                       // another AC turn ("Mara" not in snap after rename)
+BK_onOutput("The road stretches on.");
+H.assert(!/(^|\n)Mara(\n|$)/.test(SC_get("LIVING CHARACTERS CONFIG").description), "intro ledger: removed roster line stays removed");
+H.assert(SC_get("Mara") && !SC_get("@Mara"), "intro ledger: no second @-retitle");
+
+// Classification: a place reads as a place — skipped
+H.turn(20, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You map the ruins"));
+BK_onOutput("prime snap");
+BK_onContext(H.ctx());
+storyCards.unshift({ id: "62", title: "Test Chamber", keys: "Test Chamber", type: "class",
+    entry: "A sealed room deep in the facility. The chamber walls are scarred and the area is located beneath the old district.", description: "" });
+BK_onOutput("You sketch the chamber.");
+H.assert(!SC_get("@Test Chamber"), "place card not introduced (entry reads as a place)");
+H.assert(!/(^|\n)Test Chamber(\n|$)/.test(SC_get("LIVING CHARACTERS CONFIG").description), "place card not rostered");
+
+// Compression turn: AC.event set, no new card -> empty diff, nothing happens
+H.turn(21, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You rest"));
+BK_onContext(H.ctx());
+BK_onOutput("You wake refreshed.");
+H.assert(!/T21 \[BridgeKit\] introduced/.test(SC_get("Event Log").entry), "compression-shaped turn (event, no card) introduces nothing");
+
+// Excluded titles never introduced even when person-shaped
+H.turn(22, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You check your settings"));
+BK_onOutput("prime snap");
+BK_onContext(H.ctx());
+storyCards.unshift({ id: "63", title: "Configure Auto-Cards", keys: "cac", type: "class",
+    entry: "He who edits this card controls their own destiny, they say.", description: "" });
+BK_onOutput("Settings hum.");
+H.assert(!SC_get("@Configure Auto-Cards"), "excluded titles are never introduced");
+delete state.InnerSelf;
+
+// AI-DEN (LIVE-SHAPED, 7/15 live matrix, rule 9): an android narrated as
+// "it" — 0 person vs 0 place signals. v0.8.0 skipped him silently; v0.8.1's
+// flipped default introduces him. The entry below is the real generated card.
+H.turn(23, "do"); H.resetCaches();
+GK_onInput(H.doFrame("/AC {AI-DEN}"));
+state.InnerSelf = { AC: { event: true } };
+BK_onOutput("prime snap");
+BK_onContext(H.ctx());
+storyCards.unshift({ id: "64", title: "AI-DEN", keys: "AI-DEN , AI-DEN,AI-DEN'", type: "class",
+    entry: "{title: AI-DEN}\n- AI-DEN is an advanced service android designed for testing and maintenance in controlled environments\n- Its frame is a sleek, matte gray metal alloy, reinforced for durability and impact resistance\n- The robot stands just over six feet tall, with a humanoid shape designed for optimal mobility and versatility in various situations\n- Its head is a smooth dome housing sophisticated sensor arrays, capable of detecting and interpreting complex visual cues, thermal patterns, and aural data with precision",
+    description: "Auto-Cards will contextualize these memories:\n{updates: false, limit: 3200}" });
+BK_onOutput("AI-DEN's optical sensors focus on you, waiting.");
+H.assert(!!SC_get("@AI-DEN"), "AI-DEN introduced despite zero person-pronouns (v0.8.1 flipped default)");
+H.assert(/(^|\n)AI-DEN(\n|$)/.test(SC_get("LIVING CHARACTERS CONFIG").description), "AI-DEN rostered in LC NOTES");
+H.assert(/introduced "AI-DEN" — IS\+LC/.test(SC_get("Event Log").entry), "AI-DEN introduction posted to Event Log");
+delete state.InnerSelf;
+
+// Normal turns after: no scan, snap maintenance only, text untouched (rule 7)
+H.turn(24, "do"); H.resetCaches();
+GK_onInput(H.doFrame("You carry on"));
+H.assert(BK_onOutput("Plain story text.") === "Plain story text.", "BK_onOutput stays a passthrough");
+
 H.summary("BridgeKit");

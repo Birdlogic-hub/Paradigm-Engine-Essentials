@@ -28,6 +28,6 @@ if (Object.values(PINS).every(p => fs.existsSync(p))) {
         part(PINS.lc),
         part(PINS.sb)
     ].join("\n\n") + "\n";
-    fs.writeFileSync(path.join(__dirname, "PE Characters - Library.txt"), chars);
-    console.log("PE Characters: bundle + BridgeKit + IS + LC + SlowBurn -> PE Characters - Library.txt (" + chars.length + " chars)");
+    fs.writeFileSync(path.join(__dirname, "PE Characters - Library.js"), chars);
+    console.log("PE Characters: bundle + BridgeKit + IS + LC + SlowBurn -> PE Characters - Library.js (" + chars.length + " chars)");
 }

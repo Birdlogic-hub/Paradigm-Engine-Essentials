@@ -1,4 +1,20 @@
-// ===== BridgeKit v0.7.0 =====
+// ===== BridgeKit v0.8.1 =====
+// v0.8.1 (live-found 7/15/2026, FIRST generation of the live matrix): AI-DEN
+//  — an android the model narrates as "it" — scored 0 person vs 0 place
+//  signals and the conservative classifier skipped him silently. Default
+//  FLIPPED per the proposal's own cost analysis: skip only when the entry
+//  CLEARLY reads as a place; ties and pronoun-less entries are introduced.
+//  Skips now log their reason to the console (the tester's channel — the
+//  Event Log stays introductions-only).
+// v0.8.0: the INTRODUCTION — character auto-registration (opt-in). New
+//  AC-generated character cards are introduced to the guests that care:
+//  IS via its own @-title protocol (IS:704 — a documented card-data API,
+//  NOT a config write), LC via the guestbook clause (append-only, dedup'd,
+//  reported, reversible NOTES write), SlowBurn via SUGGESTION only (the
+//  leash outranks the convenience). Design proposal:
+//  Documentation/Design Proposals/Character Auto-Registration (the Introduction) - Design Proposal.md
+//  Concept and advocacy: ShotRush. BridgeKit acquires a state namespace
+//  (state.vars.BK) and a config card ("BridgeKit Config") with this version.
 // v0.7.0: functions renamed ISC_* -> BK_* (ISC was 'Inner Self Compat' — the
 //  module bridges four scripts now; the prefix follows the module at last)
 // script by bottledfox
@@ -29,7 +45,10 @@
 //
 // DEPENDS ON: GateKit (the seam it pulls); degrades to pure passthrough
 // without it, or without Inner Self (marker never appears). ParaCards
-// optional (Event Log reporting). Owns no cards, no state namespace.
+// optional (Event Log reporting; required for the opt-in Introduction —
+// no CardLib means no config card means the feature stays off, rule 7).
+// Owns one card ("BridgeKit Config") and one namespace (state.vars.BK)
+// as of v0.8.0.
 //
 // v0.2.0 (live-found, 7/14/2026 "Test Chamber" capture): Auto-Cards
 // GENERATION turns are a second special-turn class. AC hijacks the context
@@ -93,7 +112,7 @@ const BK_LC_THOUGHT_MARKER = "Begin your reply with ONE short parenthetical";
 
 // Load canary
 try {
-    if (typeof log === "function") log("[BridgeKit] library loaded (v0.7.0)");
+    if (typeof log === "function") log("[BridgeKit] library loaded (v0.8.1)");
 } catch (e) {}
 
 function BK_isTaskContext(ctx) {
@@ -220,11 +239,160 @@ function BK_retypeGuestCards() {
     }
 }
 
-// Output pass: passthrough groom. LC re-types its cards on every sync and
-// runs before us on output — this pass runs after, so categories stick
-// between turns. Returns text untouched, always (rule 7).
+// ===== the INTRODUCTION (v0.8.0) =====
+// When Auto-Cards generates a character, introduce them to the guests that
+// care. Detection is a DIFF (AC inserts at the FRONT of storyCards —
+// IS:7711 — so "last card" heuristics read the oldest card in the
+// adventure); classification is the model's own prose. Opt-in, append-only,
+// dedup'd, reported, reversible — the guestbook clause. Concept: ShotRush.
+
+const BK_LC_CONFIG_TITLE = "LIVING CHARACTERS CONFIG";
+// Titles that must never be introduced no matter how person-shaped they look.
+const BK_INTRO_EXCLUDE_RX = /^(configure\b|edit to enable\b|inner$|self$|agent$|evolution stages\b|living characters\b|thought cards\b)/i;
+// Name-shape gate: 1-3 capitalized words, apostrophes/hyphens ok, no digits.
+const BK_NAME_SHAPE_RX = /^[A-Z][A-Za-z'\-]*(?:\s+[A-Z][A-Za-z'\-]*){0,2}$/;
+// The model's own prose is the classifier. v0.8.1: permissive-by-default —
+// a false introduction is one visible, reversible roster line; a false skip
+// is invisible nothing (AI-DEN, 7/15). Skip only when place-signals WIN.
+const BK_PERSON_RX = /\b(he|she|his|her|hers|him|who|whom|they|them|their)\b/gi;
+const BK_PLACE_RX = /\b(located|place|area|region|building|city|town|village|room|chamber|hall|district|structure|walls)\b/gi;
+
+function BK_state() {
+    try {
+        if (typeof state !== "object" || !state) return null;
+        if (!state.vars || typeof state.vars !== "object") state.vars = {};
+        if (!state.vars.BK || typeof state.vars.BK !== "object") state.vars.BK = {};
+        const BK = state.vars.BK;
+        if (!Array.isArray(BK.snap)) BK.snap = [];
+        if (!Array.isArray(BK.intro)) BK.intro = [];
+        if (typeof BK.scanTurn !== "number") BK.scanTurn = -1;
+        return BK;
+    } catch (e) { return null; }
+}
+
+function BK_turn() {
+    return (typeof info === "object" && info && typeof info.actionCount === "number") ? info.actionCount : -1;
+}
+
+// Opt-in switch. No CardLib -> no config card -> feature stays off (rule 7).
+function BK_autoRegisterOn() {
+    if (typeof SC_config !== "function") return false;
+    try {
+        const cfg = SC_config("BridgeKit Config", { AUTO_REGISTER: false }, {
+            description: "BridgeKit settings. Auto Register: when true, characters "
+                + "generated by Auto-Cards are introduced to Inner Self (its @-card "
+                + "protocol) and Living Characters (roster notes, append-only), with "
+                + "a SlowBurn suggestion in the Event Log. Introductions are reported "
+                + "there and reversible: delete the roster line and it stays deleted."
+        });
+        return !!(cfg && cfg.AUTO_REGISTER === true);
+    } catch (e) { return false; }
+}
+
+// AC-typed card titles, listing order preserved (AC inserts new cards at the front).
+function BK_classTitles() {
+    const out = [];
+    if (typeof storyCards === "undefined" || !Array.isArray(storyCards)) return out;
+    for (let i = 0; i < storyCards.length; i++) {
+        const c = storyCards[i];
+        if (c && typeof c.title === "string" && String(c.type || "").toLowerCase() === "class") out.push(c.title);
+    }
+    return out;
+}
+
+// Returns null when the card should be introduced, else the skip reason.
+function BK_whyNotCharacter(card) {
+    if (!card || typeof card.title !== "string" || typeof card.entry !== "string") return "unreadable card";
+    const title = card.title.trim();
+    if (title === "" || title.length > 30 || /\d/.test(title) || !BK_NAME_SHAPE_RX.test(title)) return "title fails the name gate";
+    const person = (card.entry.match(BK_PERSON_RX) || []).length;
+    const place = (card.entry.match(BK_PLACE_RX) || []).length;
+    if (place > person) return "reads as a place (" + place + " place vs " + person + " person signals)";
+    return null;
+}
+
+// LC leg — the guestbook clause: append-only, case-insensitively dedup'd
+// against the roster in LC's config card NOTES (LC reads names one per line;
+// its label line is ignored; unknown names are handled safely per LC's docs).
+function BK_lcGuestbook(name) {
+    if (typeof SC_get !== "function") return false;
+    const card = SC_get(BK_LC_CONFIG_TITLE);
+    if (!card) return false;
+    const notes = String(card.description || "");
+    const has = notes.split("\n").some(function (l) {
+        return l.trim().toLowerCase() === name.toLowerCase();
+    });
+    if (!has) card.description = (notes.trim() === "") ? name : (notes.replace(/\s+$/, "") + "\n" + name);
+    return true;
+}
+
+// One arrival, introduced once, ever (the intro ledger is the reversibility
+// guarantee: a name the player removed is never re-added).
+function BK_introduce(card) {
+    const BK = BK_state();
+    if (!BK || !card) return;
+    const name = String(card.title || "").trim();
+    const key = name.toLowerCase();
+    if (name === "" || BK.intro.indexOf(key) !== -1) return;
+    const legs = [];
+    // IS leg: the @-title protocol (IS:704) — IS strips the @ on its next
+    // config scan and registers the agent; the title round-trips.
+    try {
+        if (typeof state === "object" && state && state.InnerSelf && name.charAt(0) !== "@") {
+            card.title = "@" + name;
+            legs.push("IS");
+        }
+    } catch (e) {}
+    try { if (BK_lcGuestbook(name)) legs.push("LC"); } catch (e) {}
+    if (legs.length === 0) return;   // nobody home; leave the arrival for a future pass
+    BK.intro.push(key);
+    if (BK.intro.length > 30) BK.intro.shift();
+    if (typeof SC_report === "function") {
+        SC_report("BridgeKit", "introduced \"" + name + "\" — " + legs.join("+"));
+        // SlowBurn leg: the leash outranks the convenience — suggestion only.
+        try {
+            if (typeof SLOWBURN === "function" && !BK_slowburnConfigured()) {
+                SC_report("BridgeKit", name + " arrived — fill their name into Evolution Stages to start SlowBurn");
+            }
+        } catch (e) {}
+    }
+}
+
+// The scan: runs on the output pass of an AC generation turn (BK_onOutput is
+// wired AFTER InnerSelf("output"), where AC finalizes the card). Compression
+// turns set the same flag but add no card — empty diff, nothing happens.
+function BK_introductionPass() {
+    const BK = BK_state();
+    if (!BK) return;
+    const titles = BK_classTitles();
+    const t = BK_turn();
+    if (t !== -1 && BK.scanTurn === t && BK_autoRegisterOn()) {
+        for (let i = 0; i < titles.length; i++) {
+            const title = titles[i];
+            if (BK.snap.indexOf(title) !== -1) continue;
+            let why = null;
+            let card = null;
+            if (BK_INTRO_EXCLUDE_RX.test(title.trim())) why = "excluded title";
+            else if (!(card = (typeof SC_get === "function") ? SC_get(title) : null)) why = "card not readable";
+            else why = BK_whyNotCharacter(card);
+            if (why === null) {
+                BK_introduce(card);
+            } else if (typeof log === "function") {
+                // skips stay out of the Event Log; the console is the tester's channel
+                log("[BridgeKit] not introduced: \"" + title + "\" — " + why);
+            }
+        }
+        BK.scanTurn = -1;
+    }
+    BK.snap = BK_classTitles().slice(0, 60);
+}
+
+// Output pass: passthrough groom + the Introduction scan. LC re-types its
+// cards on every sync and runs before us on output — this pass runs after,
+// so categories stick between turns. Returns text untouched, always (rule 7).
 function BK_onOutput(text) {
     try { BK_retypeGuestCards(); } catch (e) {}
+    try { BK_introductionPass(); } catch (e) {}
     return String(text || "");
 }
 
@@ -232,6 +400,7 @@ function BK_onOutput(text) {
 // that expect hand-made ones. Returns text untouched, always (rule 7).
 function BK_onInput(text) {
     try { BK_retypeGuestCards(); } catch (e) {}
+    try { BK_autoRegisterOn(); } catch (e) {}   // rule 11: config card materializes Turn 1
     try {
         if (typeof SLOWBURN === "function" && typeof SC_ensure === "function") {
             const has = (typeof SC_get === "function" && SC_get(BK_SB_CARD_TITLE))
@@ -259,7 +428,14 @@ function BK_onContext(text) {
     const ctx = String(text || "");
     try { BK_retypeGuestCards(); } catch (e) {}   // LC's context sync just ran; re-groom
     try {
-        const why = BK_isAutoCardsContext(ctx) ? "Auto-Cards turn"
+        const isAC = BK_isAutoCardsContext(ctx);
+        if (isAC) {
+            // Flag this turn for the Introduction scan (runs in BK_onOutput,
+            // after AC has finalized the generated card).
+            const BK = BK_state();
+            if (BK) BK.scanTurn = BK_turn();
+        }
+        const why = isAC ? "Auto-Cards turn"
             : BK_isSaeControlTurn() ? "Story Arc Engine turn"
             : BK_isLcThoughtContext(ctx) ? "LC thought turn"
             : BK_isTaskContext(ctx) ? "IS task turn"
