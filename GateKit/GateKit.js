@@ -1,4 +1,10 @@
-// ===== GateKit v0.7.0 =====
+// ===== GateKit v0.7.1 =====
+// v0.7.1 — the NOTE seam: GK_setArbiterNote(owner, line). Extensions hand
+//  the arbiter one line each (data, not functions); GateKit renders every
+//  note inside its EXISTING block, after the luck line — zero extra context
+//  blocks, which is the whole point (SkillKit proposal §3: one arbiter
+//  voice, not two tail blocks). Capped 160 chars/owner; set "" to clear.
+//  First consumer: SkillKit (the Skill).
 // script by bottledfox
 //
 // Paradigm Engine primitive: THE CHECK.
@@ -36,6 +42,7 @@
 //   GK_lastCheck()        → {result, difficulty, skill, luck, turn} | null
 //   GK_setLuck(n)         → supply/bend this action's luck (clamped to range)
 //   GK_markCommandTurn()  → stamp this turn non-adjudicable (bookkeeping)
+//   GK_setArbiterNote(owner, line) → one rendered line in the arbiter block (160 cap)
 // ---------------------------------------------------------------------------
 
 // Defaults. With ParaCard present these seed the editable "GateKit Config"
@@ -66,7 +73,7 @@ const GK_PROMPT = [
 // Load canary: appears in Console Log / Script Test logs on EVERY hook run.
 // If you don't see this line, the Library isn't attached, saved, or executing.
 try {
-    if (GK_cfg().DEBUG_CONSOLE) log("[GateKit] library loaded (v0.7.0)");
+    if (GK_cfg().DEBUG_CONSOLE) log("[GateKit] library loaded (v0.7.1)");
 } catch (e) {}
 
 // Verdict line emitted by the model (v0.7.0 skill-first schema: the model
@@ -120,6 +127,10 @@ function GK_state() {
     if (typeof GK.commandTurn !== "number") GK.commandTurn = -1;
     if (!Object.prototype.hasOwnProperty.call(GK, "lastCheck")) GK.lastCheck = null;
     if (!Array.isArray(GK.log)) GK.log = [];
+    if (!GK.notes || typeof GK.notes !== "object") GK.notes = {};
+    for (const k in GK.notes) {
+        if (typeof GK.notes[k] !== "string" || GK.notes[k] === "") delete GK.notes[k];
+    }
     delete GK.on;     // v0.5.x runtime toggle — superseded by live cfg.ENABLED
     delete GK.echo;   // v0.5.x /check reply channel — removed with /check
     return GK;
@@ -159,6 +170,19 @@ function GK_setLuck(value) {
 // meta action) so the arbiter skips it. Call from any module's Input pass.
 function GK_markCommandTurn() {
     GK_state().commandTurn = GK_turn();
+}
+
+// v0.7.1 — the NOTE seam. An extension supplies ONE line the arbiter should
+// see (ranks, world state, gauges); GateKit renders all notes inside its
+// existing block, after the luck line. Notes persist until their owner
+// overwrites or clears them (line "" deletes). Data only; 160 chars/owner.
+function GK_setArbiterNote(owner, line) {
+    const GK = GK_state();
+    const key = String(owner == null ? "" : owner).trim();
+    if (key === "") return;
+    const s = String(line == null ? "" : line).replace(/\s+/g, " ").trim();
+    if (s === "") { delete GK.notes[key]; return; }
+    GK.notes[key] = s.slice(0, 160);
 }
 
 // --- Input: per-action luck roll ---------------------------------------------------
@@ -203,10 +227,17 @@ function GK_onContext(text) {
             + Math.floor(Math.random() * (cfg.LUCK_MAX - cfg.LUCK_MIN + 1));
     }
 
-    const block = GK_PROMPT
+    let block = GK_PROMPT
         .replace(/\{\{\s*LUCK\s*\}\}/gi, String(GK.luck))
         .replace(/\{\{\s*MIN\s*\}\}/gi, String(cfg.LUCK_MIN))
         .replace(/\{\{\s*MAX\s*\}\}/gi, String(cfg.LUCK_MAX));
+
+    // v0.7.1: extension notes ride the existing block, after the luck line —
+    // one arbiter voice, zero extra tail blocks (the note seam's contract).
+    const noteKeys = Object.keys(GK.notes || {}).sort();
+    if (noteKeys.length) {
+        block = block.replace(/^(luck=.*)$/m, "$1\n" + noteKeys.map(k => GK.notes[k]).join("\n"));
+    }
 
     // Delivery-first capacity policy: the injection is the module's job.
     const maxChars = (info && typeof info.maxChars === "number") ? info.maxChars : 0;

@@ -27,7 +27,8 @@ function srcPath(name) {
     const candidates = [
         path.join(__dirname, "..", "src", name + ".js"),
         path.join(__dirname, "_src", name + ".js"),
-        path.join(__dirname, "..", name, name + ".js")
+        path.join(__dirname, "..", name, name + ".js"),
+        path.join(__dirname, "..", "..", "PE RPG", name, name + ".js")
     ];
     for (const c of candidates) if (fs.existsSync(c)) return c;
     throw new Error("module source not found: " + name + " (tried " + candidates.join(", ") + ")");
@@ -45,7 +46,7 @@ function load() {
     const caches = [];
     for (const name of arguments) {
         const src = fs.readFileSync(srcPath(name), "utf-8")
-            .replace(/^const (GK_|SC_|RX_|INV_|BK_)([A-Z_]+)/gm, "var $1$2")
+            .replace(/^const (GK_|SC_|RX_|INV_|BK_|SK_)([A-Z_]+)/gm, "var $1$2")
             .replace(/^let (GK_DEBUG_RAW|GK_CFG_CACHE|INV_CFG_CACHE)/gm, "var $1");
         for (const m of src.matchAll(/^var (\w+_CFG_CACHE)/gm)) caches.push(m[1]);
         out += src + "\n";
