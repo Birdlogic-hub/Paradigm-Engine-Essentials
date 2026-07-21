@@ -458,7 +458,36 @@ function SC_report(owner, line, turnNo) {
     return card;
 }
 
-// ===== GateKit v0.7.1 =====
+// ===== GateKit v0.8.2 =====
+// v0.8.2 — GK_isCommandTurn(), the read half of the bookkeeping stamp
+//  (EventKit build, 7/21): extensions could MARK a turn non-adjudicable
+//  but not ASK about one — TrackerKit's drift deviation documented the
+//  gap ("public-seam contract forbids reading GK's command stamp").
+//  Now they ask, not peek. One getter, no behavior change.
+// v0.8.1 — the BARE dialect (live-found 7/16, minutes into v0.8.0):
+//  'Survival; trivial; success; resource=none;' — the model kept the field
+//  ORDER sacred and shed every label, and the line walked through both the
+//  parser and the near-miss net (which looks for labels) into the story.
+//  Fix: parse the bare positional dialect (same group layout as skill-
+//  first), and widen the near-miss detector to know 'resource'.
+// v0.8.0 — the COST (first schema event; owner directive 7/16): the verdict
+//  line grows one optional trailing field, resource=none|name -n|name +n.
+//  BIDIRECTIONAL: the model reports meaningful spends (-) AND restores (+)
+//  of resources named in its notes — /use item efficacy rides this channel
+//  (InventoryKit consumes deterministically; the ruling says what it did).
+//  Static field, closed vocabulary (the enabled resource names) — the same
+//  class as skill=, NOT the rejected per-scenario dynamic deltas. GateKit
+//  stores {resource, resourceDelta} raw; TrackerKit clamps (25%/turn cap)
+//  and applies. Optional + trailing = fully backward compatible.
+// v0.7.2 — the DIE, stage one (owner's call, 7/16): luck is an EXPLICIT d20.
+//  The d20 is the most conventionalized random number in the training data;
+//  naming it borrows the DM's outcome mapping outright (2 misses, 19
+//  crushes) where a d100 percentile maps to nothing. Luck Min/Max leave the
+//  config card — a configurable die would destroy the convention that makes
+//  this work — but the INTERNAL bounds survive below as the private seam the
+//  future spine rides (roll a narrowed range while stating a d20). Verdict
+//  schema untouched; crit thresholds deferred (v0.8 candidate c). Old
+//  adventures' config cards keep stale Luck Min/Max lines — unread, harmless.
 // v0.7.1 — the NOTE seam: GK_setArbiterNote(owner, line). Extensions hand
 //  the arbiter one line each (data, not functions); GateKit renders every
 //  note inside its EXISTING block, after the luck line — zero extra context
@@ -502,6 +531,7 @@ function SC_report(owner, line, turnNo) {
 //   GK_lastCheck()        → {result, difficulty, skill, luck, turn} | null
 //   GK_setLuck(n)         → supply/bend this action's luck (clamped to range)
 //   GK_markCommandTurn()  → stamp this turn non-adjudicable (bookkeeping)
+//   GK_isCommandTurn()    → is this turn stamped? (v0.8.2 — ask, don't peek)
 //   GK_setArbiterNote(owner, line) → one rendered line in the arbiter block (160 cap)
 // ---------------------------------------------------------------------------
 
@@ -509,23 +539,32 @@ function SC_report(owner, line, turnNo) {
 // card and back-fill any line the player deletes or mangles.
 const GK_SETTINGS = {
     ENABLED: true,              // the checker; LIVE — card edits apply next action
-    LUCK_MIN: 1,                // luck roll range, rolled once per action
-    LUCK_MAX: 100,              // (retries of the same action keep their roll)
     REPORT: true,               // post rulings to the "Event Log" card (needs ParaCard)
     SHOW_TOAST: false,          // state.message — NOT implemented on Phoenix UI
     DEBUG_CONSOLE: true,        // mirror GK activity to the editor's CONSOLE LOG
     DEBUG_FOOTER: false         // GK_onOutputDebug appends a visible footer (playtesting)
 };
 
-// The arbiter block. {{LUCK}}/{{MIN}}/{{MAX}} substituted at context time.
+// The die (v0.7.2): FIXED d20, stated to the model by name. Private bounds —
+// not config — because the convention is the mechanism. The future spine
+// narrows GK_DIE_ROLL_MAX while the prompt keeps saying d20 (loaded dice).
+const GK_DIE_MIN = 1;
+const GK_DIE_MAX = 20;          // stated die size (never change casually)
+const GK_DIE_ROLL_MAX = 20;     // actual roll ceiling (the spine seam)
+
+function GK_rollDie() {
+    return GK_DIE_MIN + Math.floor(Math.random() * (GK_DIE_ROLL_MAX - GK_DIE_MIN + 1));
+}
+
+// The arbiter block. {{LUCK}} substituted at context time.
 const GK_PROMPT = [
     "<SYSTEM>",
     "You are the silent arbiter of player actions. Before narrating, decide the outcome of the player's most recent action based on story consistency and luck.",
-    "luck={{LUCK}}",
-    "Luck is {{MIN}} min, {{MAX}} max. Luck does not apply to impossible or trivial actions.",
-    "First output EXACTLY one line — name the skill involved, THEN judge its difficulty, THEN the check:",
-    "skill=name; difficulty=trivial|minor|major|impossible; check=success|partial|fail;",
-    "Rules: impossible always fails. Trivial always succeeds. Luck sways only minor and major attempts. Use skill=none when no particular skill applies.",
+    "luck={{LUCK}} (a d20 roll)",
+    "Read the luck roll as a dungeon master reads a d20: 1 is the worst possible luck, 20 the best. Luck does not apply to impossible or trivial actions.",
+    "First output EXACTLY one line — name the skill involved, THEN judge its difficulty, THEN the check, THEN any resource spent or restored:",
+    "skill=name; difficulty=trivial|minor|major|impossible; check=success|partial|fail; resource=none|name -amount|name +amount;",
+    "Rules: impossible always fails. Trivial always succeeds. Luck sways only minor and major attempts. Use skill=none when no particular skill applies. resource: report a meaningful spend (-) or restore (+) of a resource listed in your notes (e.g. resource=stamina -6, or resource=health +10 when something heals you); otherwise resource=none.",
     "Then continue the story, honoring the verdict.",
     "</SYSTEM>"
 ].join("\n");
@@ -533,14 +572,19 @@ const GK_PROMPT = [
 // Load canary: appears in Console Log / Script Test logs on EVERY hook run.
 // If you don't see this line, the Library isn't attached, saved, or executing.
 try {
-    if (GK_cfg().DEBUG_CONSOLE) log("[GateKit] library loaded (v0.7.1)");
+    if (GK_cfg().DEBUG_CONSOLE) log("[GateKit] library loaded (v0.8.1)");
 } catch (e) {}
 
 // Verdict line emitted by the model (v0.7.0 skill-first schema: the model
 // names the skill, then reasons difficulty, then concludes the check —
 // premise before conclusion, now including WHICH premise).
 // Delimiters =/: and separators ;/, accepted — prompt strictly, parse generously.
-const GK_VERDICT_RX = /^\s*skill\s*[=:]\s*([^;\n]+?)\s*[;,]\s*difficulty\s*[=:]\s*(trivial|minor|major|impossible)\s*[;,]\s*check\s*[=:]\s*(success|partial|fail)\s*[;,]?\s*$/im;
+const GK_VERDICT_RX = /^\s*skill\s*[=:]\s*([^;\n]+?)\s*[;,]\s*difficulty\s*[=:]\s*(trivial|minor|major|impossible)\s*[;,]\s*check\s*[=:]\s*(success|partial|fail)\s*[;,]?(?:\s*resource\s*[=:]\s*([^;\n]+?)\s*[;,]?)?\s*$/im;
+
+// v0.8.1 — the BARE dialect (live-found): labels dropped, order kept.
+// "Survival; trivial; success; resource=none;" — same group layout as
+// skill-first, so it maps identically after matching.
+const GK_VERDICT_RX_BARE = /^\s*([a-z][a-z0-9 '\-]{0,40}?)\s*[;,]\s*(trivial|minor|major|impossible)\s*[;,]\s*(success|partial|fail)\s*[;,]?(?:\s*resource\s*[=:]\s*([^;\n]+?)\s*[;,]?)?\s*$/im;
 
 // v0.4–v0.6 order (difficulty-first, skill optional trailing), still accepted —
 // models echo old context, and skill-less rulings arrive in this shape.
@@ -569,8 +613,6 @@ function GK_cfg() {
     } else {
         cfg = Object.assign({}, GK_SETTINGS);
     }
-    cfg.LUCK_MIN = Math.max(0, Math.min(999, Math.round(cfg.LUCK_MIN)));
-    cfg.LUCK_MAX = Math.max(cfg.LUCK_MIN + 1, Math.min(1000, Math.round(cfg.LUCK_MAX)));
     GK_CFG_CACHE = cfg;
     return cfg;
 }
@@ -621,8 +663,7 @@ function GK_setLuck(value) {
     const GK = GK_state();
     const n = Number(value);
     if (!Number.isFinite(n)) return;
-    const cfg = GK_cfg();
-    GK.luck = Math.max(cfg.LUCK_MIN, Math.min(cfg.LUCK_MAX, Math.round(n)));
+    GK.luck = Math.max(GK_DIE_MIN, Math.min(GK_DIE_MAX, Math.round(n)));
     GK.luckTurn = GK_turn();
 }
 
@@ -630,6 +671,11 @@ function GK_setLuck(value) {
 // meta action) so the arbiter skips it. Call from any module's Input pass.
 function GK_markCommandTurn() {
     GK_state().commandTurn = GK_turn();
+}
+
+// v0.8.2: the read half of the stamp — extensions ask, never peek.
+function GK_isCommandTurn() {
+    return GK_state().commandTurn === GK_turn();
 }
 
 // v0.7.1 — the NOTE seam. An extension supplies ONE line the arbiter should
@@ -653,8 +699,7 @@ function GK_onInput(text) {
     if (GK.luckTurn !== turn) {
         const cfg = GK_cfg();
         GK.luckTurn = turn;
-        GK.luck = cfg.LUCK_MIN
-            + Math.floor(Math.random() * (cfg.LUCK_MAX - cfg.LUCK_MIN + 1));
+        GK.luck = GK_rollDie();
         // v0.6.2, doctrine rule 11: projections exist from Turn 1 — the
         // Event Log materializes here, not on the first ruling post.
         if (cfg.REPORT && cfg.ENABLED && typeof SC_reportEnsure === "function") SC_reportEnsure();
@@ -683,14 +728,11 @@ function GK_onContext(text) {
     const turn = GK_turn();
     if (GK.luckTurn !== turn || GK.luck == null) {
         GK.luckTurn = turn;
-        GK.luck = cfg.LUCK_MIN
-            + Math.floor(Math.random() * (cfg.LUCK_MAX - cfg.LUCK_MIN + 1));
+        GK.luck = GK_rollDie();
     }
 
     let block = GK_PROMPT
-        .replace(/\{\{\s*LUCK\s*\}\}/gi, String(GK.luck))
-        .replace(/\{\{\s*MIN\s*\}\}/gi, String(cfg.LUCK_MIN))
-        .replace(/\{\{\s*MAX\s*\}\}/gi, String(cfg.LUCK_MAX));
+        .replace(/\{\{\s*LUCK\s*\}\}/gi, String(GK.luck));
 
     // v0.7.1: extension notes ride the existing block, after the luck line —
     // one arbiter voice, zero extra tail blocks (the note seam's contract).
@@ -743,6 +785,7 @@ function GK_onOutput(text) {
 
     let m = out.match(GK_VERDICT_RX);            // v0.7 skill-first
     let dialect = "skillFirst";
+    if (!m) { m = out.match(GK_VERDICT_RX_BARE); }   // v0.8.1 bare: same groups
     if (!m) { m = out.match(GK_VERDICT_RX_DFIRST); dialect = "difficultyFirst"; }
     if (!m) { m = out.match(GK_VERDICT_RX_LEGACY); dialect = "legacy"; }
     if (!m) {
@@ -751,7 +794,7 @@ function GK_onOutput(text) {
         // log it verbatim so each model rotation reports its own format.
         const first = out.split("\n").find(l => l.trim()) || "";
         if (first.length < 160
-            && /\b(difficulty|check|skill)\s*[-=:]/i.test(first)
+            && /\b(difficulty|check|skill|resource)\s*[-=:]/i.test(first)
             && /\b(trivial|minor|major|impossible|success|partial|fail)\b/i.test(first)) {
             GK_log("UNPARSED verdict-like line (add to parser): \"" + first.trim() + "\"");
             out = out.replace(first, "").replace(/\n{3,}/g, "\n\n").trim();
@@ -770,10 +813,24 @@ function GK_onOutput(text) {
             GK_log("coerced contradictory ruling " + result + "/impossible -> fail/impossible");
             result = "fail";
         }
+        // v0.8.0 the Cost: optional bidirectional resource field (skill-first dialect)
+        let resource = null, resourceDelta = 0;
+        const rawRes = (dialect === "skillFirst" && m[4]) ? m[4].trim() : "";
+        if (rawRes !== "" && !/^(none|n\/a|na|null|-+)$/i.test(rawRes)) {
+            const rm = rawRes.match(/^([a-z][a-z0-9 '\-]*?)\s*([+-])\s*(\d+)$/i);
+            if (rm) {
+                resource = rm[1].trim().toLowerCase();
+                resourceDelta = parseInt(rm[3], 10) * (rm[2] === "-" ? -1 : 1);
+            } else {
+                GK_log("UNPARSED resource field (add to parser): \"" + rawRes + "\"");
+            }
+        }
         GK.lastCheck = {
             result: result,
             difficulty: difficulty,
             skill: skill,
+            resource: resource,
+            resourceDelta: resourceDelta,
             luck: GK.luck,
             turn: GK_turn()
         };
@@ -798,6 +855,8 @@ function GK_onOutput(text) {
                 SC_report("GateKit", "ruling: " + GK.lastCheck.difficulty + " difficulty → "
                     + GK.lastCheck.result
                     + (GK.lastCheck.skill ? " (" + GK.lastCheck.skill + ")" : "")
+                    + (GK.lastCheck.resource ? " · " + GK.lastCheck.resource + " "
+                        + (GK.lastCheck.resourceDelta > 0 ? "+" : "") + GK.lastCheck.resourceDelta : "")
                     + " · luck " + (GK.luck == null ? "-" : GK.luck));
             } else if (playerTurn) {
                 SC_report("GateKit", "no ruling captured · luck " + (GK.luck == null ? "-" : GK.luck));
@@ -848,7 +907,38 @@ function GK_onOutputDebug(text) {
 }
 // ========================== END GK DEBUG SECTION ===============================
 
-// ===== InventoryKit v0.1.2 =====
+// ===== InventoryKit v0.1.6 =====
+// v0.1.6 — deferred receipts (live-found 7/16, the duck heist's epilogue):
+//  a failed grab printed '{ducks x60 added}' AND '{You failed to get 60
+//  ducks}' in the same output — the receipt was queued at commit time,
+//  before the ruling existed. Judged acquisitions now hold their receipt
+//  until the ruling stands; only unjudged ('none' policy) receipts print
+//  at input. The Event Log keeps both entries — that's an honest history;
+//  the player-facing echo is a statement of fact, and facts wait.
+// v0.1.5 — /swap: pure ledger reclassification (items ⇄ wallet), NEVER
+//  adjudicated — nothing happens in the fiction when coins change pockets;
+//  bookkeeping is deterministic, adjudication is for consequences. Auto-
+//  direction (whichever side holds the name moves to the other; items→
+//  wallet preferred), bare '/swap coins' moves ALL, composite undo op
+//  reverses both sides in one /undo.
+// v0.1.4 — the DUCK HEIST (live-found 7/16): '/take 60 ducks' in a duckless
+//  guardroom sailed through — v0.1.3's stow-tail made stubs MORE outcome-
+//  claiming, feeding the arbiter's leniency. Fix: outcome/gated acquisition
+//  stubs are now ATTEMPT-phrased ('You attempt to take X and stow it away')
+//  — the Spine's attempt-not-outcome principle applied to our own stubs
+//  first; the anti-consumption tail survives as intent. Also: MULTI-GRAB —
+//  '/take 2 red healing tonic; iron dagger; rope' (semicolon-separated,
+//  optional leading amounts, one turn, one ruling, one receipt; a fail
+//  ruling rolls back the whole grab).
+// v0.1.3 — the TONIC INCIDENT (live-found 7/16): '/take red tonic' stubbed
+//  to 'You take the red tonic.' and the model completed the AFFORDANCE —
+//  it narrated drinking it, leaving the fiction with an empty vial while
+//  the ledger still held a full one. STATE IS TRUTH; the story must not
+//  contradict the ledger. Two fixes: acquisition stubs now foreclose the
+//  consumption affordance ('...stowing it away.') so the narration lands
+//  on storage, and every acquisition posts a visible {receipt} echo (the
+//  SIS clarity lesson) so the player always sees what the bookkeeping did
+//  regardless of what the prose claims. /use remains the consumption path.
 // (né SlashInventory, renamed 7/14/2026 — same module, same INV_ prefix, same versions)
 // script by bottledfox
 //
@@ -909,14 +999,14 @@ const INV_SETTINGS = {
     REPORT: true                   // post mutations to the "Event Log" card
 };
 
-const INV_VERBS = ["take", "collect", "drop", "give", "throw", "use", "undo", "inventory", "inv"];
+const INV_VERBS = ["take", "collect", "drop", "give", "throw", "use", "swap", "undo", "inventory", "inv"];
 const INV_NAME_CAP = 40;       // max chars for a /take'd item name
 const INV_ITEM_CAP = 99;       // max copies of one item (SIS's cap, kept)
 const INV_UNDO_MAX = 20;       // undo ring buffer depth (SIS's depth, kept)
 
 // Load canary
 try {
-    if (typeof log === "function") log("[InventoryKit] library loaded (v0.1.2)");
+    if (typeof log === "function") log("[InventoryKit] library loaded (v0.1.6)");
 } catch (e) {}
 
 // --- Live settings -----------------------------------------------------------------
@@ -1097,6 +1187,8 @@ function INV_onInput(text) {
             else if (op.kind === "remove") { INV_add(op.name, op.amount); }
             else if (op.kind === "wallet_add") { INV_walletAdd(op.name, -op.amount); }
             else if (op.kind === "wallet_remove") { INV_walletAdd(op.name, op.amount); }
+            else if (op.kind === "swap_to_wallet") { INV_walletAdd(op.name, -op.amount); INV_add(op.name, op.amount); }
+            else if (op.kind === "swap_to_items") { INV_removeItems(op.name, op.amount); INV_walletAdd(op.name, op.amount); }
             INV_say("Undid: " + op.kind.replace("_", " ") + " " + op.name + " x" + op.amount);
             INV_report("undo: reversed " + op.kind.replace("_", " ") + " " + op.name + " x" + op.amount);
             INV_renderCard();
@@ -1105,37 +1197,92 @@ function INV_onInput(text) {
         stub = " ";
     }
 
+    // ---- /swap: ledger reclassification (meta, never judged) ----
+    else if (verb === "swap") {
+        const candidates = INV.items.concat(Object.keys(INV.wallet));
+        const parsed = RX_nounAndAmount(candidates, args, 0);   // 0 = "all of them"
+        if (!parsed) {
+            INV_say("You don't have that to swap. (/swap 60 coins, or /swap coins for all)");
+        } else {
+            const held = INV_count(parsed.name);
+            if (held > 0) {
+                const want = parsed.amount > 0 ? Math.min(parsed.amount, held) : held;
+                const n = INV_removeItems(parsed.name, want);
+                INV_walletAdd(parsed.name, n);
+                INV_logOp("swap_to_wallet", parsed.name, n);
+                INV_say(parsed.name + " x" + n + " moved to your wallet.");
+                INV_report(parsed.name + " x" + n + " moved items → wallet (/swap)");
+            } else {
+                const have = INV_walletGet(parsed.name);
+                const want = parsed.amount > 0 ? Math.min(parsed.amount, have) : have;
+                const added = INV_add(parsed.name, want);        // item cap may shrink it
+                INV_walletAdd(parsed.name, -added);
+                INV_logOp("swap_to_items", parsed.name, added);
+                INV_say(parsed.name + " x" + added + " moved to your inventory."
+                    + (added < want ? " (item cap reached)" : ""));
+                INV_report(parsed.name + " x" + added + " moved wallet → items (/swap)");
+            }
+            INV_renderCard();
+        }
+        INV_mark(); stub = " ";
+    }
+
     // ---- acquisitions ----
     else if (verb === "take" || verb === "collect") {
-        const amt = RX_amount(args, 1);
-        const name = amt.remainder.trim();
-        if (!name) {
-            INV_say("What do you want to " + verb + "? Try /" + verb + " 3 torches");
+        const isWallet = (verb === "collect");
+        const policy = INV_policy(verb);
+        // v0.1.4 multi-grab: semicolon-separated segments, optional leading amounts.
+        const segs = args.split(/\s*;\s*/).map(function (x) { return x.trim(); }).filter(Boolean);
+        const items = [];
+        let bad = null;
+        for (let i = 0; i < segs.length; i++) {
+            const a = RX_amount(segs[i], 1);
+            const nm = a.remainder.trim();
+            if (!nm) { bad = "missing an item name in \"" + segs[i] + "\""; break; }
+            if (nm.length > INV_NAME_CAP) { bad = "that name is too long (max " + INV_NAME_CAP + " characters)"; break; }
+            items.push({ target: isWallet ? "wallet" : "items", name: nm, amount: a.amount });
+        }
+        if (!segs.length) {
+            INV_say("What do you want to " + verb + "? Try /" + verb + " 3 torches; rope");
             INV_mark(); stub = " ";
-        } else if (name.length > INV_NAME_CAP) {
-            INV_say("That name is too long (max " + INV_NAME_CAP + " characters).");
+        } else if (bad) {
+            INV_say("Couldn't " + verb + ": " + bad);
             INV_mark(); stub = " ";
         } else {
-            const policy = INV_policy(verb);
-            const isWallet = (verb === "collect");
-            const doCommit = function () {
-                if (isWallet) { INV_walletAdd(name, amt.amount); INV_logOp("wallet_add", name, amt.amount); }
-                else { INV_add(name, amt.amount); INV_logOp("add", name, amt.amount); }
+            const parts = items.map(function (it) { return INV_qty(it.name, it.amount); });
+            const spoken = parts.length === 1 ? parts[0]
+                : parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
+            const plural = (items.length > 1 || items[0].amount > 1) ? "them" : "it";
+            const receipt = items.map(function (it) { return it.name + " x" + it.amount; }).join(", ")
+                + " added to your " + (isWallet ? "wallet" : "inventory") + ".";
+            const commitAll = function () {
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].target === "wallet") { INV_walletAdd(items[i].name, items[i].amount); INV_logOp("wallet_add", items[i].name, items[i].amount); }
+                    else { INV_add(items[i].name, items[i].amount); INV_logOp("add", items[i].name, items[i].amount); }
+                }
                 INV_renderCard();
             };
+            // ATTEMPT-phrased stubs for judged policies (the duck heist):
+            // the stow-intent survives as purpose, not accomplishment.
+            const attemptStub = "You attempt to take " + spoken + " and "
+                + (isWallet ? "pocket " : "stow ") + plural + " away.";
             if (policy === "gated") {
-                INV.pending = { kind: "gated", verb: verb, target: isWallet ? "wallet" : "items", name: name, amount: amt.amount, turn: turn };
-                INV_report(INV_qty(name, amt.amount) + " — gated, awaiting ruling (/" + verb + ")");
-                stub = "You attempt to take " + INV_qty(name, amt.amount) + ".";
+                INV.pending = { kind: "gated-acquire", verb: verb, items: items, turn: turn };
+                INV_report(receipt.replace(" added", " — gated, awaiting ruling"));
+                stub = attemptStub;
             } else {
-                doCommit();
-                INV_report(name + " x" + amt.amount + " added (/" + verb + ")");
+                commitAll();
+                INV_report(receipt + " (/" + verb + ")");
                 if (policy === "outcome") {
-                    INV.pending = { kind: "outcome-acquire", verb: verb, target: isWallet ? "wallet" : "items", name: name, amount: amt.amount, turn: turn };
+                    // Receipt DEFERRED to the ruling: printed only if the grab stands.
+                    INV.pending = { kind: "outcome-acquire", verb: verb, items: items, receipt: receipt, turn: turn };
+                    stub = attemptStub;
                 } else {
+                    INV_say(receipt);
                     INV_mark();
+                    stub = "You take " + spoken + ", "
+                        + (isWallet ? "pocketing " : "stowing ") + plural + " away.";
                 }
-                stub = "You take " + INV_qty(name, amt.amount) + ".";
             }
         }
     }
@@ -1209,6 +1356,12 @@ function INV_onOutput(text) {
             }
             INV_renderCard();
         };
+        // v0.1.4: acquisitions carry an items array; migrate stale singles.
+        const acq = p.items || (p.name ? [{ target: p.target, name: p.name, amount: p.amount }] : []);
+        const acqSpoken = function () {
+            const l = acq.map(function (it) { return INV_qty(it.name, it.amount); });
+            return l.length === 1 ? l[0] : l.slice(0, -1).join(", ") + " and " + l[l.length - 1];
+        };
         if (p.kind === "gated") {
             if (failed) {
                 INV_say("The attempt fails — nothing " + (p.spend ? "spent" : "gained") + ".");
@@ -1217,13 +1370,34 @@ function INV_onOutput(text) {
                 commit();
                 INV_report(p.name + " x" + p.amount + " " + (p.spend ? "removed" : "added") + " (gated /" + p.verb + " — ruling allowed)");
             }
-        } else if (p.kind === "outcome-acquire" && failed) {
-            // Roll back the optimistic commit: you reached, you didn't get it
-            if (p.target === "wallet") { INV_walletAdd(p.name, -p.amount); INV_logOp("wallet_remove", p.name, p.amount); }
-            else { INV_removeItems(p.name, p.amount); INV_logOp("remove", p.name, p.amount); }
-            INV_renderCard();
-            INV_say("You failed to get " + INV_qty(p.name, p.amount) + ".");
-            INV_report("/" + p.verb + " rolled back (ruling: fail)");
+        } else if (p.kind === "gated-acquire") {
+            if (failed) {
+                INV_say("The attempt fails — nothing gained.");
+                INV_report("gated /" + p.verb + " cancelled (ruling: fail)");
+            } else {
+                for (let i = 0; i < acq.length; i++) {
+                    if (acq[i].target === "wallet") { INV_walletAdd(acq[i].name, acq[i].amount); INV_logOp("wallet_add", acq[i].name, acq[i].amount); }
+                    else { INV_add(acq[i].name, acq[i].amount); INV_logOp("add", acq[i].name, acq[i].amount); }
+                }
+                INV_renderCard();
+                const receipt = acq.map(function (it) { return it.name + " x" + it.amount; }).join(", ")
+                    + " added to your " + (p.verb === "collect" ? "wallet" : "inventory") + ".";
+                INV_say(receipt);
+                INV_report(receipt + " (gated /" + p.verb + " — ruling allowed)");
+            }
+        } else if (p.kind === "outcome-acquire") {
+            if (failed) {
+                // Roll back the whole optimistic grab: you reached, you didn't get it
+                for (let i = 0; i < acq.length; i++) {
+                    if (acq[i].target === "wallet") { INV_walletAdd(acq[i].name, -acq[i].amount); INV_logOp("wallet_remove", acq[i].name, acq[i].amount); }
+                    else { INV_removeItems(acq[i].name, acq[i].amount); INV_logOp("remove", acq[i].name, acq[i].amount); }
+                }
+                INV_renderCard();
+                INV_say("You failed to get " + acqSpoken() + ".");
+                INV_report("/" + p.verb + " rolled back (ruling: fail)");
+            } else if (p.receipt) {
+                INV_say(p.receipt);       // the grab stands; the receipt is now true
+            }
         }
         INV.pending = null;
     }

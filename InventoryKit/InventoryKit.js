@@ -1,4 +1,35 @@
-// ===== InventoryKit v0.1.2 =====
+// ===== InventoryKit v0.1.6 =====
+// v0.1.6 — deferred receipts (live-found 7/16, the duck heist's epilogue):
+//  a failed grab printed '{ducks x60 added}' AND '{You failed to get 60
+//  ducks}' in the same output — the receipt was queued at commit time,
+//  before the ruling existed. Judged acquisitions now hold their receipt
+//  until the ruling stands; only unjudged ('none' policy) receipts print
+//  at input. The Event Log keeps both entries — that's an honest history;
+//  the player-facing echo is a statement of fact, and facts wait.
+// v0.1.5 — /swap: pure ledger reclassification (items ⇄ wallet), NEVER
+//  adjudicated — nothing happens in the fiction when coins change pockets;
+//  bookkeeping is deterministic, adjudication is for consequences. Auto-
+//  direction (whichever side holds the name moves to the other; items→
+//  wallet preferred), bare '/swap coins' moves ALL, composite undo op
+//  reverses both sides in one /undo.
+// v0.1.4 — the DUCK HEIST (live-found 7/16): '/take 60 ducks' in a duckless
+//  guardroom sailed through — v0.1.3's stow-tail made stubs MORE outcome-
+//  claiming, feeding the arbiter's leniency. Fix: outcome/gated acquisition
+//  stubs are now ATTEMPT-phrased ('You attempt to take X and stow it away')
+//  — the Spine's attempt-not-outcome principle applied to our own stubs
+//  first; the anti-consumption tail survives as intent. Also: MULTI-GRAB —
+//  '/take 2 red healing tonic; iron dagger; rope' (semicolon-separated,
+//  optional leading amounts, one turn, one ruling, one receipt; a fail
+//  ruling rolls back the whole grab).
+// v0.1.3 — the TONIC INCIDENT (live-found 7/16): '/take red tonic' stubbed
+//  to 'You take the red tonic.' and the model completed the AFFORDANCE —
+//  it narrated drinking it, leaving the fiction with an empty vial while
+//  the ledger still held a full one. STATE IS TRUTH; the story must not
+//  contradict the ledger. Two fixes: acquisition stubs now foreclose the
+//  consumption affordance ('...stowing it away.') so the narration lands
+//  on storage, and every acquisition posts a visible {receipt} echo (the
+//  SIS clarity lesson) so the player always sees what the bookkeeping did
+//  regardless of what the prose claims. /use remains the consumption path.
 // (né SlashInventory, renamed 7/14/2026 — same module, same INV_ prefix, same versions)
 // script by bottledfox
 //
@@ -59,14 +90,14 @@ const INV_SETTINGS = {
     REPORT: true                   // post mutations to the "Event Log" card
 };
 
-const INV_VERBS = ["take", "collect", "drop", "give", "throw", "use", "undo", "inventory", "inv"];
+const INV_VERBS = ["take", "collect", "drop", "give", "throw", "use", "swap", "undo", "inventory", "inv"];
 const INV_NAME_CAP = 40;       // max chars for a /take'd item name
 const INV_ITEM_CAP = 99;       // max copies of one item (SIS's cap, kept)
 const INV_UNDO_MAX = 20;       // undo ring buffer depth (SIS's depth, kept)
 
 // Load canary
 try {
-    if (typeof log === "function") log("[InventoryKit] library loaded (v0.1.2)");
+    if (typeof log === "function") log("[InventoryKit] library loaded (v0.1.6)");
 } catch (e) {}
 
 // --- Live settings -----------------------------------------------------------------
@@ -247,6 +278,8 @@ function INV_onInput(text) {
             else if (op.kind === "remove") { INV_add(op.name, op.amount); }
             else if (op.kind === "wallet_add") { INV_walletAdd(op.name, -op.amount); }
             else if (op.kind === "wallet_remove") { INV_walletAdd(op.name, op.amount); }
+            else if (op.kind === "swap_to_wallet") { INV_walletAdd(op.name, -op.amount); INV_add(op.name, op.amount); }
+            else if (op.kind === "swap_to_items") { INV_removeItems(op.name, op.amount); INV_walletAdd(op.name, op.amount); }
             INV_say("Undid: " + op.kind.replace("_", " ") + " " + op.name + " x" + op.amount);
             INV_report("undo: reversed " + op.kind.replace("_", " ") + " " + op.name + " x" + op.amount);
             INV_renderCard();
@@ -255,37 +288,92 @@ function INV_onInput(text) {
         stub = " ";
     }
 
+    // ---- /swap: ledger reclassification (meta, never judged) ----
+    else if (verb === "swap") {
+        const candidates = INV.items.concat(Object.keys(INV.wallet));
+        const parsed = RX_nounAndAmount(candidates, args, 0);   // 0 = "all of them"
+        if (!parsed) {
+            INV_say("You don't have that to swap. (/swap 60 coins, or /swap coins for all)");
+        } else {
+            const held = INV_count(parsed.name);
+            if (held > 0) {
+                const want = parsed.amount > 0 ? Math.min(parsed.amount, held) : held;
+                const n = INV_removeItems(parsed.name, want);
+                INV_walletAdd(parsed.name, n);
+                INV_logOp("swap_to_wallet", parsed.name, n);
+                INV_say(parsed.name + " x" + n + " moved to your wallet.");
+                INV_report(parsed.name + " x" + n + " moved items → wallet (/swap)");
+            } else {
+                const have = INV_walletGet(parsed.name);
+                const want = parsed.amount > 0 ? Math.min(parsed.amount, have) : have;
+                const added = INV_add(parsed.name, want);        // item cap may shrink it
+                INV_walletAdd(parsed.name, -added);
+                INV_logOp("swap_to_items", parsed.name, added);
+                INV_say(parsed.name + " x" + added + " moved to your inventory."
+                    + (added < want ? " (item cap reached)" : ""));
+                INV_report(parsed.name + " x" + added + " moved wallet → items (/swap)");
+            }
+            INV_renderCard();
+        }
+        INV_mark(); stub = " ";
+    }
+
     // ---- acquisitions ----
     else if (verb === "take" || verb === "collect") {
-        const amt = RX_amount(args, 1);
-        const name = amt.remainder.trim();
-        if (!name) {
-            INV_say("What do you want to " + verb + "? Try /" + verb + " 3 torches");
+        const isWallet = (verb === "collect");
+        const policy = INV_policy(verb);
+        // v0.1.4 multi-grab: semicolon-separated segments, optional leading amounts.
+        const segs = args.split(/\s*;\s*/).map(function (x) { return x.trim(); }).filter(Boolean);
+        const items = [];
+        let bad = null;
+        for (let i = 0; i < segs.length; i++) {
+            const a = RX_amount(segs[i], 1);
+            const nm = a.remainder.trim();
+            if (!nm) { bad = "missing an item name in \"" + segs[i] + "\""; break; }
+            if (nm.length > INV_NAME_CAP) { bad = "that name is too long (max " + INV_NAME_CAP + " characters)"; break; }
+            items.push({ target: isWallet ? "wallet" : "items", name: nm, amount: a.amount });
+        }
+        if (!segs.length) {
+            INV_say("What do you want to " + verb + "? Try /" + verb + " 3 torches; rope");
             INV_mark(); stub = " ";
-        } else if (name.length > INV_NAME_CAP) {
-            INV_say("That name is too long (max " + INV_NAME_CAP + " characters).");
+        } else if (bad) {
+            INV_say("Couldn't " + verb + ": " + bad);
             INV_mark(); stub = " ";
         } else {
-            const policy = INV_policy(verb);
-            const isWallet = (verb === "collect");
-            const doCommit = function () {
-                if (isWallet) { INV_walletAdd(name, amt.amount); INV_logOp("wallet_add", name, amt.amount); }
-                else { INV_add(name, amt.amount); INV_logOp("add", name, amt.amount); }
+            const parts = items.map(function (it) { return INV_qty(it.name, it.amount); });
+            const spoken = parts.length === 1 ? parts[0]
+                : parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
+            const plural = (items.length > 1 || items[0].amount > 1) ? "them" : "it";
+            const receipt = items.map(function (it) { return it.name + " x" + it.amount; }).join(", ")
+                + " added to your " + (isWallet ? "wallet" : "inventory") + ".";
+            const commitAll = function () {
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].target === "wallet") { INV_walletAdd(items[i].name, items[i].amount); INV_logOp("wallet_add", items[i].name, items[i].amount); }
+                    else { INV_add(items[i].name, items[i].amount); INV_logOp("add", items[i].name, items[i].amount); }
+                }
                 INV_renderCard();
             };
+            // ATTEMPT-phrased stubs for judged policies (the duck heist):
+            // the stow-intent survives as purpose, not accomplishment.
+            const attemptStub = "You attempt to take " + spoken + " and "
+                + (isWallet ? "pocket " : "stow ") + plural + " away.";
             if (policy === "gated") {
-                INV.pending = { kind: "gated", verb: verb, target: isWallet ? "wallet" : "items", name: name, amount: amt.amount, turn: turn };
-                INV_report(INV_qty(name, amt.amount) + " — gated, awaiting ruling (/" + verb + ")");
-                stub = "You attempt to take " + INV_qty(name, amt.amount) + ".";
+                INV.pending = { kind: "gated-acquire", verb: verb, items: items, turn: turn };
+                INV_report(receipt.replace(" added", " — gated, awaiting ruling"));
+                stub = attemptStub;
             } else {
-                doCommit();
-                INV_report(name + " x" + amt.amount + " added (/" + verb + ")");
+                commitAll();
+                INV_report(receipt + " (/" + verb + ")");
                 if (policy === "outcome") {
-                    INV.pending = { kind: "outcome-acquire", verb: verb, target: isWallet ? "wallet" : "items", name: name, amount: amt.amount, turn: turn };
+                    // Receipt DEFERRED to the ruling: printed only if the grab stands.
+                    INV.pending = { kind: "outcome-acquire", verb: verb, items: items, receipt: receipt, turn: turn };
+                    stub = attemptStub;
                 } else {
+                    INV_say(receipt);
                     INV_mark();
+                    stub = "You take " + spoken + ", "
+                        + (isWallet ? "pocketing " : "stowing ") + plural + " away.";
                 }
-                stub = "You take " + INV_qty(name, amt.amount) + ".";
             }
         }
     }
@@ -359,6 +447,12 @@ function INV_onOutput(text) {
             }
             INV_renderCard();
         };
+        // v0.1.4: acquisitions carry an items array; migrate stale singles.
+        const acq = p.items || (p.name ? [{ target: p.target, name: p.name, amount: p.amount }] : []);
+        const acqSpoken = function () {
+            const l = acq.map(function (it) { return INV_qty(it.name, it.amount); });
+            return l.length === 1 ? l[0] : l.slice(0, -1).join(", ") + " and " + l[l.length - 1];
+        };
         if (p.kind === "gated") {
             if (failed) {
                 INV_say("The attempt fails — nothing " + (p.spend ? "spent" : "gained") + ".");
@@ -367,13 +461,34 @@ function INV_onOutput(text) {
                 commit();
                 INV_report(p.name + " x" + p.amount + " " + (p.spend ? "removed" : "added") + " (gated /" + p.verb + " — ruling allowed)");
             }
-        } else if (p.kind === "outcome-acquire" && failed) {
-            // Roll back the optimistic commit: you reached, you didn't get it
-            if (p.target === "wallet") { INV_walletAdd(p.name, -p.amount); INV_logOp("wallet_remove", p.name, p.amount); }
-            else { INV_removeItems(p.name, p.amount); INV_logOp("remove", p.name, p.amount); }
-            INV_renderCard();
-            INV_say("You failed to get " + INV_qty(p.name, p.amount) + ".");
-            INV_report("/" + p.verb + " rolled back (ruling: fail)");
+        } else if (p.kind === "gated-acquire") {
+            if (failed) {
+                INV_say("The attempt fails — nothing gained.");
+                INV_report("gated /" + p.verb + " cancelled (ruling: fail)");
+            } else {
+                for (let i = 0; i < acq.length; i++) {
+                    if (acq[i].target === "wallet") { INV_walletAdd(acq[i].name, acq[i].amount); INV_logOp("wallet_add", acq[i].name, acq[i].amount); }
+                    else { INV_add(acq[i].name, acq[i].amount); INV_logOp("add", acq[i].name, acq[i].amount); }
+                }
+                INV_renderCard();
+                const receipt = acq.map(function (it) { return it.name + " x" + it.amount; }).join(", ")
+                    + " added to your " + (p.verb === "collect" ? "wallet" : "inventory") + ".";
+                INV_say(receipt);
+                INV_report(receipt + " (gated /" + p.verb + " — ruling allowed)");
+            }
+        } else if (p.kind === "outcome-acquire") {
+            if (failed) {
+                // Roll back the whole optimistic grab: you reached, you didn't get it
+                for (let i = 0; i < acq.length; i++) {
+                    if (acq[i].target === "wallet") { INV_walletAdd(acq[i].name, -acq[i].amount); INV_logOp("wallet_remove", acq[i].name, acq[i].amount); }
+                    else { INV_removeItems(acq[i].name, acq[i].amount); INV_logOp("remove", acq[i].name, acq[i].amount); }
+                }
+                INV_renderCard();
+                INV_say("You failed to get " + acqSpoken() + ".");
+                INV_report("/" + p.verb + " rolled back (ruling: fail)");
+            } else if (p.receipt) {
+                INV_say(p.receipt);       // the grab stands; the receipt is now true
+            }
         }
         INV.pending = null;
     }
